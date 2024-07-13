@@ -67,7 +67,6 @@ Additional options:
 
 ## Create the Vocabulary
 ```
-./createVocabulary.sh
 python createVocabulary.py --feature_id 0 --rgb_folder ~/BOVISA/2008-09-01/rgb --featSettYamlFile settings/orb32_settings.yaml
 ```
 
