@@ -1,0 +1,3 @@
+[submodule "Thirdparty/DBoW2"]
+	path = Thirdparty/DBoW2
+	url = https://github.com/alejandrofontan/DBoW2.git

@@ -1,0 +1,11 @@
+%YAML:1.0
+
+# sift128 parameters
+
+# Feature Extractor 
+FeatureExtractor.numOctaves: 8
+FeatureExtractor.scaleFactor: 2.0
+FeatureExtractor.detectionTh: 10.0
+
+# Feature Matcher 
+FeatureMatcher.matchingTh: 0.5

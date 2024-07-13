@@ -1,0 +1,11 @@
+%YAML:1.0
+
+# surf64 parameters
+
+# Feature Extractor 
+FeatureExtractor.numOctaves: 8
+FeatureExtractor.scaleFactor: 1.2
+FeatureExtractor.detectionTh: 100.0
+
+# Feature Matcher 
+FeatureMatcher.matchingTh: 0.04

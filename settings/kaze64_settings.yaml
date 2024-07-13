@@ -1,0 +1,11 @@
+%YAML:1.0
+
+# kaze64 parameters
+
+# Feature Extractor 
+FeatureExtractor.numOctaves: 8
+FeatureExtractor.scaleFactor: 1.1892 # 2^0.25
+FeatureExtractor.detectionTh: 0.0005
+
+# Feature Matcher 
+FeatureMatcher.matchingTh: 0.1

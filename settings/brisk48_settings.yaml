@@ -1,0 +1,11 @@
+%YAML:1.0
+
+# brisk48 parameters
+
+# Feature Extractor 
+FeatureExtractor.numOctaves: 8
+FeatureExtractor.scaleFactor: 1.5
+FeatureExtractor.detectionTh: 34.0
+
+# Feature Matcher 
+FeatureMatcher.matchingTh: 120.0

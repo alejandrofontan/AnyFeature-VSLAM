@@ -1,0 +1,11 @@
+%YAML:1.0
+
+# orb32 parameters
+
+# Feature Extractor 
+FeatureExtractor.numOctaves: 8
+FeatureExtractor.scaleFactor: 1.2
+FeatureExtractor.detectionTh: 20.0
+
+# Feature Matcher 
+FeatureMatcher.matchingTh: 75.0

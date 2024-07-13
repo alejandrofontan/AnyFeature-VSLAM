@@ -1,0 +1,8 @@
+%YAML:1.0
+
+# anyFeatBin parameters
+
+# Feature Extractor 
+FeatureExtractor.numOctaves: 8
+FeatureExtractor.scaleFactor: 1.2
+FeatureExtractor.detectionTh: 20.0

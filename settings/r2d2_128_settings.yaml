@@ -1,0 +1,11 @@
+%YAML:1.0
+
+# r2d2_128 parameters
+
+# Feature Extractor 
+FeatureExtractor.numOctaves: 1
+FeatureExtractor.scaleFactor: 2.0
+FeatureExtractor.detectionTh: 1.0
+
+# Feature Matcher 
+FeatureMatcher.matchingTh: 0.38f
