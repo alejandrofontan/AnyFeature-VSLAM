@@ -55,7 +55,8 @@ class Tracking
 public:
     Tracking(System* pSys, shared_ptr<Vocabulary> vocabulary, std::shared_ptr<FrameDrawer> pFrameDrawer, std::shared_ptr<MapDrawer> pMapDrawer, shared_ptr<Map> pMap,
              shared_ptr<KeyFrameDatabase> pKFDB,
-             const string &settingsYamlFile, const string &feature_settings_yaml_file,
+             const string &strCalibrationPath, const string &strSettingPath,
+             const string &feature_settings_yaml_file,
              const int sensor,
              const vector<FeatureType>& featureTypes,
              const bool& fixImageSize = false);
@@ -151,7 +152,7 @@ protected:
     bool NeedNewKeyFrame();
     void CreateNewKeyFrame();
 
-    void loadCameraParameters(const string &settingsYamlFile);
+    void loadCameraParameters(const string &strCalibrationPath, const string &strSettingPath);
     shared_ptr<FeatureExtractor> getFeatureExtractor(const int& scaleNumFeaturesMonocular_,
                                                      const string &featureSettingsYamlFile);
     static void getGrayImage(cv::Mat& im, const bool& rgb);

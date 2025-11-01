@@ -28,33 +28,45 @@ namespace ANYFEATURE_VSLAM
 {
 
 Viewer::Viewer(std::shared_ptr<System> system, std::shared_ptr<FrameDrawer> frameDrawer,
-               std::shared_ptr<MapDrawer> mapDrawer, std::shared_ptr<Tracking> tracker
-               , const string &strSettingPath,
+               std::shared_ptr<MapDrawer> mapDrawer, std::shared_ptr<Tracking> tracker,
+               const string &strCalibrationPath, const string &strSettingPath,
                const vector<FeatureType>& featureTypes):
         system(system), frameDrawer(frameDrawer),mapDrawer(mapDrawer), tracker(tracker),
     mbFinishRequested(false), mbFinished(true), mbStopped(true), mbStopRequested(false),
     featureTypes(featureTypes)
 {
-    cv::FileStorage fSettings(strSettingPath, cv::FileStorage::READ);
 
-    if (!fSettings["Camera.fps"].empty()){
-        float fps = fSettings["Camera.fps"];
-        mT = 1e3/fps;
+    cv::FileStorage fCalibration(strCalibrationPath, cv::FileStorage::READ);
+
+    float fps = fCalibration["Camera0.fps"];
+    if(fps<1)
+        fps=30;
+    mT = 1e3/fps;
+
+    imageWidth = fCalibration["Camera0.w"];
+    imageHeight = fCalibration["Camera0.h"];
+    if(imageWidth<1 || imageHeight<1)
+    {
+        imageWidth = 640;
+        imageHeight = 480;
     }
 
-    if (!fSettings["Camera.w"].empty())
-        imageWidth = fSettings["Camera.w"];
-    if (!fSettings["Camera.h"].empty())
-        imageHeight = fSettings["Camera.h"];
+    cout << endl << "[Viewer.cc] Camera Parameters: " << strCalibrationPath << endl;
+    cout << "- w: " << imageWidth << endl;
+    cout << "- h: " << imageHeight << endl;
+    cout << "- fps: " << fps << endl;
+    
+    cv::FileStorage fSettings(strSettingPath, cv::FileStorage::READ);
+    mViewpointX = fSettings["Viewer.ViewpointX"];
+    mViewpointY = fSettings["Viewer.ViewpointY"];
+    mViewpointZ = fSettings["Viewer.ViewpointZ"];
+    mViewpointF = fSettings["Viewer.ViewpointF"];
 
-    if (!fSettings["Viewer.ViewpointX"].empty())
-        mViewpointX = fSettings["Viewer.ViewpointX"];
-    if (!fSettings["Viewer.ViewpointY"].empty())
-        mViewpointY = fSettings["Viewer.ViewpointY"];
-    if (!fSettings["Viewer.ViewpointZ"].empty())
-        mViewpointZ = fSettings["Viewer.ViewpointZ"];
-    if (!fSettings["Viewer.ViewpointF"].empty())
-        mViewpointF = fSettings["Viewer.ViewpointF"];
+    cout << endl << "[Viewer.cc] Viewer Parameters: " << strSettingPath << endl;
+    cout << "- mViewpointX: " << mViewpointX << endl;
+    cout << "- mViewpointY: " << mViewpointY << endl;
+    cout << "- mViewpointZ: " << mViewpointZ << endl;
+    cout << "- mViewpointF: " << mViewpointF << endl; 
 }
 
 void Viewer::Run()

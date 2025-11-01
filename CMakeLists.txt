@@ -93,8 +93,8 @@ target_link_libraries(${PROJECT_NAME}
         pango_windowing
 )
 
-add_executable(mono src/mono.cpp)
-target_link_libraries(mono ${PROJECT_NAME})
+add_executable(vslamlab_anyfeature_mono src/vslamlab_anyfeature_mono.cpp)
+target_link_libraries(vslamlab_anyfeature_mono ${PROJECT_NAME})
 
 add_executable(createVocabulary src/createVocabulary.cpp)
 target_link_libraries(createVocabulary ${PROJECT_NAME})

@@ -56,7 +56,8 @@ namespace ANYFEATURE_VSLAM
 Tracking::Tracking(System *pSys, shared_ptr<Vocabulary> vocabulary,
                    std::shared_ptr<FrameDrawer> frameDrawer, std::shared_ptr<MapDrawer> mapDrawer,
                    shared_ptr<Map> map, shared_ptr<KeyFrameDatabase> pKFDB,
-                   const string &settingsYamlFile, const string &feature_settings_yaml_file,
+                   const string &strCalibrationPath, const string &strSettingPath,
+                   const string &feature_settings_yaml_file,
                    const int sensor,
                    const vector<FeatureType>& featureTypes,
                    const bool& fixImageSize):
@@ -65,7 +66,7 @@ Tracking::Tracking(System *pSys, shared_ptr<Vocabulary> vocabulary,
     frameDrawer(frameDrawer), mapDrawer(mapDrawer), map(map), lastRelocFrameId(0), featureTypes(featureTypes), fixImageSize(fixImageSize)
 {
     // Load camera parameters from settings yaml file
-    Tracking::loadCameraParameters(settingsYamlFile);
+    Tracking::loadCameraParameters(strCalibrationPath, strSettingPath);
 
     // Max/Min Frames to insert keyframes and to check relocalisation
     minFrames = 0;
@@ -1390,29 +1391,19 @@ void Tracking::InformOnlyTracking(const bool &flag)
     onlyTracking = flag;
 }
 
-void Tracking::loadCameraParameters(const string &settingsYamlFile){
+void Tracking::loadCameraParameters(const string &strCalibrationPath, const string &strSettingPath){
 
     // Load camera parameters from settings yaml file
-    cv::FileStorage fSettings(settingsYamlFile, cv::FileStorage::READ);
+    cv::FileStorage fCalibration(strCalibrationPath, cv::FileStorage::READ);
+    float fx = fCalibration["Camera0.fx"];
+    float fy = fCalibration["Camera0.fy"];
+    float cx = fCalibration["Camera0.cx"];
+    float cy = fCalibration["Camera0.cy"];
 
-    if (fSettings["Camera.fx"].empty() || fSettings["Camera.fy"].empty() ||
-        fSettings["Camera.cx"].empty() || fSettings["Camera.cy"].empty() ||
-        fSettings["Camera.k1"].empty() || fSettings["Camera.k2"].empty() ||
-        fSettings["Camera.p1"].empty() || fSettings["Camera.p2"].empty() ||
-        fSettings["Camera.w"].empty() || fSettings["Camera.h"].empty()
-        ){
-
-        printError("Tracking", "Undefined intrinsics (fx, fy, cx, cy, k1 ,k2, p1, p2, w, h) in " + settingsYamlFile);
-        terminate();
-    }
 
     // Calibration matrix
-    float fx = fSettings["Camera.fx"];
-    float fy = fSettings["Camera.fy"];
-    float cx = fSettings["Camera.cx"];
-    float cy = fSettings["Camera.cy"];
-    w = fSettings["Camera.w"];
-    h = fSettings["Camera.h"];
+    w = fCalibration["Camera0.w"];
+    h = fCalibration["Camera0.h"];
 
     if(fixImageSize){
         float ratio = float(w) / float(h);
@@ -1436,14 +1427,13 @@ void Tracking::loadCameraParameters(const string &settingsYamlFile){
     K.at<float>(1,2) = cy;
     K.copyTo(mK);
 
-
     // Distortion coefficients
     cv::Mat DistCoef(4,1,CV_32F);
-    DistCoef.at<float>(0) = fSettings["Camera.k1"];
-    DistCoef.at<float>(1) = fSettings["Camera.k2"];
-    DistCoef.at<float>(2) = fSettings["Camera.p1"];
-    DistCoef.at<float>(3) = fSettings["Camera.p2"];
-    const float k3 = fSettings["Camera.k3"];
+    DistCoef.at<float>(0) = fCalibration["Camera0.k1"];
+    DistCoef.at<float>(1) = fCalibration["Camera0.k2"];
+    DistCoef.at<float>(2) = fCalibration["Camera0.p1"];
+    DistCoef.at<float>(3) = fCalibration["Camera0.p2"];
+    const float k3 = fCalibration["Camera0.k3"];
     if(k3!=0)
     {
         DistCoef.resize(5);
@@ -1452,29 +1442,39 @@ void Tracking::loadCameraParameters(const string &settingsYamlFile){
     DistCoef.copyTo(mDistCoef);
 
     // Camera frequence (hz)
-    fps = fSettings["Camera.fps"];
+    fps = fCalibration["Camera0.fps"];
     if(fps == 0)
         fps = fps0;
 
     // RGB order
-    if (!fSettings["Camera.RGB"].empty())
-        mbRGB = bool(int(fSettings["Camera.RGB"]));
+    if (!fCalibration["Camera0.RGB"].empty())
+        mbRGB = bool(int(fCalibration["Camera0.RGB"]));
+
+    // Load settings file
+    cv::FileStorage fSettings(strSettingPath, cv::FileStorage::READ);
 
     // Stereo baseline
-    if(mSensor == System::STEREO || mSensor == System::RGBD)
+    if(mSensor==System::STEREO || mSensor==System::RGBD)
     {
-        mbf = fSettings["Camera.bf"];
-        mThDepth = mbf * (float)fSettings["ThDepth"]/fx;
+        cout << endl  << "[Tracking.cc] RGB-D/STEREO Parameters: " << strSettingPath << endl;
+
+        mbf = float(fCalibration["Stereo.bf"]) * fx;
+        cout << "- bf: " << mbf << endl;
+
+        mThDepth = mbf *(float)fSettings["ThDepth"] / fx;
+        cout << "- Depth Threshold: " << mThDepth << endl;
+
     }
 
-    if(mSensor == System::RGBD)
-    {
-        mDepthMapFactor = fSettings["DepthMapFactor"];
-        if(fabs(mDepthMapFactor) < mDepthMapFactor_th)
-            mDepthMapFactor = 1.0f;
-        else
-            mDepthMapFactor = 1.0f/mDepthMapFactor;
-    }
+    if(mSensor==System::RGBD)
+        {
+            mDepthMapFactor = float(fCalibration["Depth0.factor"]);
+            cout << "- Depth Map Factor: " << mDepthMapFactor << endl;
+            if(fabs(mDepthMapFactor)<1e-5)
+                mDepthMapFactor=1;
+            else
+                mDepthMapFactor = 1.0f/mDepthMapFactor;
+        }
 
     // Print camera parameters
     cout << "\nCamera Parameters: " << endl;

@@ -36,7 +36,8 @@ namespace ANYFEATURE_VSLAM
 {
 
 System::System(const string &vocabularyFolder,
-               const string &strSettingsFile, const string &feature_settings_yaml_file,
+               const string &strCalibrationFile, const string &strSettingsFile,  
+               const string &feature_settings_yaml_file,
                const eSensor sensor,
                const bool activateVisualization,
                const vector<FeatureType>& featureTypes,
@@ -61,11 +62,18 @@ System::System(const string &vocabularyFolder,
         cout << "RGB-D" << endl;
 
     //Check settings file
+    cv::FileStorage fsCalibration(strCalibrationFile.c_str(), cv::FileStorage::READ);
+    if(!fsCalibration.isOpened())
+    {
+       cerr << "Failed to open calibration file at: " << strCalibrationFile << endl;
+       exit(-1);
+    }
+
     cv::FileStorage fsSettings(strSettingsFile.c_str(), cv::FileStorage::READ);
     if(!fsSettings.isOpened())
     {
-       cerr << "Failed to open settings file at: " << strSettingsFile << endl;
-       exit(-1);
+        cerr << "Failed to open settings file at: " << strSettingsFile << endl;
+        exit(-1);
     }
 
     DUtils::Random::SeedRandOnce(0);
@@ -96,7 +104,8 @@ System::System(const string &vocabularyFolder,
     //(it will live in the main thread of execution, the one that called this constructor)
     tracker = make_shared<Tracking>(this, vocabulary, frameDrawer, mapDrawer,
                              mpMap, mpKeyFrameDatabase,
-                             strSettingsFile,  feature_settings_yaml_file,
+                             strCalibrationFile, strSettingsFile, 
+                             feature_settings_yaml_file,
                              mSensor, featureTypes, fixImageSize);
 
     //Initialize the Local Mapping thread and launch
@@ -110,8 +119,9 @@ System::System(const string &vocabularyFolder,
     //Initialize the Viewer thread and launch
     if(activateVisualization)
     {
-        viewer = make_shared<Viewer>(static_cast<shared_ptr<System>>(this), frameDrawer,mapDrawer,tracker,strSettingsFile,
-                                     featureTypes);
+        viewer = make_shared<Viewer>(static_cast<shared_ptr<System>>(this), frameDrawer,mapDrawer,tracker,
+                                    strCalibrationFile, strSettingsFile,
+                                    featureTypes);
         mptViewer = make_shared<thread>(&Viewer::Run, viewer);
         tracker->SetViewer(viewer);
     }
@@ -413,9 +423,11 @@ void System::SaveKeyFrameTrajectoryTUM(const string &filename)
     // After a loop closure the first keyframe might not be at the origin.
     //cv::Mat Two = vpKFs[0]->GetPoseInverse();
 
-    ofstream f;
-    f.open(filename.c_str());
-    f << fixed;
+    std::ofstream f(filename.c_str());
+    f.imbue(std::locale::classic());
+
+    // CSV header
+    f << "timestamp,tx,ty,tz,qx,qy,qz,qw\n";
 
     for(size_t i=0; i<vpKFs.size(); i++)
     {
@@ -429,9 +441,16 @@ void System::SaveKeyFrameTrajectoryTUM(const string &filename)
         mat3f R = pKF->GetRotation().transpose();
         Eigen::Quaternionf q(R);
         vec3f t = pKF->GetCameraCenter();
-        f << setprecision(6) << pKF->mTimeStamp << setprecision(7) << " " << t(0) << " " << t(1) << " " << t(2)
-          << " " << q.x() << " " << q.y() << " " << q.z() << " " << q.w() << endl;
 
+        f << std::fixed << std::setprecision(9) << pKF->mTimeStamp << ','
+          << std::scientific << std::setprecision(7)
+          << static_cast<double>(t(0)) << ','
+          << static_cast<double>(t(1)) << ','
+          << static_cast<double>(t(2)) << ','
+          << static_cast<double>(q.x()) << ','
+          << static_cast<double>(q.y()) << ','
+          << static_cast<double>(q.z()) << ','
+          << static_cast<double>(q.w()) << '\n';
     }
 
     f.close();

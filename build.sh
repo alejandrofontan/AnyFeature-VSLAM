@@ -16,72 +16,61 @@ delete_if_exists() {
   fi
 }
 
+build_library() {
+  library_name="$1"
+  source_folder="$2"
+  verbose="$3"
+  force_build="$4"
+  install="$5"
+
+  build_folder="$source_folder/build"
+  bin_folder="$source_folder/bin"
+  lib_folder="$source_folder/lib"
+
+  if [ "$force_build" = true ]; then
+  	delete_if_exists ${source_folder}
+  fi
+
+  if [ "$verbose" = true ]; then
+    echo "[AnyFeature-VSLAM][build.sh] Compile ${library_name} ... "
+  	cmake -G Ninja -B $build_folder -S $source_folder -DCMAKE_PREFIX_PATH=$source_folder -DCMAKE_INSTALL_PREFIX=$source_folder
+  	cmake --build $build_folder --config Release
+    if [ "$install" = true ]; then
+      ninja install -C "$build_folder"
+    fi
+  else
+    echo "[AnyFeature-VSLAM][build.sh] Compile ${library_name} (output disabled) ... "
+  	cmake -G Ninja -B $build_folder -S $source_folder -DCMAKE_PREFIX_PATH=$source_folder -DCMAKE_INSTALL_PREFIX=$source_folder > /dev/null 2>&1
+  	cmake --build $build_folder --config Release > /dev/null 2>&1
+    if [ "$install" = true ]; then
+      ninja install -C $build_folder > /dev/null 2>&1
+    fi
+  fi
+}
+
 # Check inputs
 force_build=false
 verbose=false
 for input in "$@"
 do
-    echo "Processing input: $input"
     if [ "$input" = "-f" ]; then
-  	force_build=true   
+  	force_build=true
     fi
     if [ "$input" = "-v" ]; then
-  	verbose=true   
+  	verbose=true
     fi
 done
 
 # Baseline Dir
-AnyFeature_PATH=$(realpath "$0")
-AnyFeature_DIR=$(dirname "$AnyFeature_PATH")
+LIBRARY_PATH=$(realpath "$0")
+LIBRARY_DIR=$(dirname "LIBRARY_PATH")
 
-## Compile DBoW2 
-source_folder="${AnyFeature_DIR}/Thirdparty/DBoW2"     
-build_folder="$source_folder/build"
-bin_folder="$source_folder/bin"
-lib_folder="$source_folder/lib"
+## Build DBoW2
+library_name="DBoW2"
+source_folder="${LIBRARY_DIR}/Thirdparty/${library_name}"
+build_library ${library_name} ${source_folder} ${verbose} ${force_build} true
 
-if [ "$force_build" = true ]; then
-	delete_if_exists ${source_folder}
-fi
-
-if [ "$verbose" = true ]; then
-	echo "[AnyFeature-VSLAM][build.sh] Compile DBoW2 ... "   
-	cmake -G Ninja -B $build_folder -S $source_folder -DCMAKE_PREFIX_PATH=$source_folder -DCMAKE_INSTALL_PREFIX=$source_folder 
-	cmake --build $build_folder --config Release 
-	ninja install -C $build_folder
-else
-        echo "[AnyFeature-VSLAM][build.sh] Compile DBoW2 (output disabled) ... "   
-	cmake -G Ninja -B $build_folder -S $source_folder -DCMAKE_PREFIX_PATH=$source_folder -DCMAKE_INSTALL_PREFIX=$source_folder > /dev/null 2>&1
-	cmake --build $build_folder --config Release > /dev/null 2>&1
-	ninja install -C $build_folder > /dev/null 2>&1
-fi
-
-## Compile AnyFeature-VSLAM   
-source_folder="${AnyFeature_DIR}"     
-build_folder="$source_folder/build"
-bin_folder="$source_folder/bin"
-lib_folder="$source_folder/lib"
-
-if [ "$force_build" = true ]; then
-	delete_if_exists ${source_folder}
-fi
-
-if [ "$verbose" = true ]; then
-        echo "[AnyFeature-VSLAM][build.sh] Compile AnyFeature-VSLAM ... "  
-	cmake -G Ninja -B $build_folder -S $source_folder -DCMAKE_PREFIX_PATH=$source_folder -DCMAKE_INSTALL_PREFIX=$source_folder 
-	cmake --build $build_folder --config Release 
-else    
-	echo "[AnyFeature-VSLAM][build.sh] Compile AnyFeature-VSLAM (output disabled) ..."   
-	cmake -G Ninja -B $build_folder -S $source_folder -DCMAKE_PREFIX_PATH=$source_folder -DCMAKE_INSTALL_PREFIX=$source_folder > /dev/null 2>&1
-	cmake --build $build_folder --config Release > /dev/null 2>&1
-fi
-
-## Download vocabulary
-vocabulary_folder="${AnyFeature_DIR}/anyfeature_vocabulary"
-if [ ! -d "${vocabulary_folder}" ]; then
-	mkdir $vocabulary_folder
-	python "${AnyFeature_DIR}/download_vocabulary.py"
-fi
-
-
-
+## Build AnyFeature-VSLAM
+library_name="AnyFeature-VSLAM"
+source_folder="${LIBRARY_DIR}"
+build_library ${library_name} ${source_folder} ${verbose} ${force_build} false
