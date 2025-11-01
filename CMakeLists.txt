@@ -1,12 +1,19 @@
 cmake_minimum_required(VERSION 3.16)
 project(AnyFeature-VSLAM)
 
-set(CMAKE_BUILD_TYPE Release)
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -O3 -march=native")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -O3 -march=native")
+# Compiler settings
 set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_BUILD_TYPE Release)
+
+# Output directories
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/bin)
+
+# Compiler flags
+add_compile_options(-Wall -Wextra -Wpedantic -O3 -march=native)
 
 set(SRCS_ANYFEATURE
         src/System.cc
@@ -45,6 +52,7 @@ set(SRCS_ANYFEATURE
         src/Feature_anyFeatNonBin.cpp
 ) 
 
+# Dependencies
 find_package(OpenCV REQUIRED )
 find_package(Eigen3  REQUIRED NO_MODULE)
 find_package(Pangolin REQUIRED)
@@ -54,20 +62,20 @@ find_package(Python REQUIRED COMPONENTS Interpreter)
 find_package(brisk REQUIRED)
 find_package(akaze REQUIRED)
 find_package(SiftGPU REQUIRED)
-if(EXISTS "${PROJECT_SOURCE_DIR}/Thirdparty/DBoW2")
-    find_package(DBoW2 REQUIRED HINTS "${PROJECT_SOURCE_DIR}/Thirdparty/DBoW2/lib/cmake/DBoW2")
-else()
-    find_package(DBoW2 REQUIRED)
-endif()
+
+set(DBoW2_INCLUDE_DIRS "${PROJECT_SOURCE_DIR}/Thirdparty/DBoW2/include")
+set(DBoW2_LIBRARIES "${PROJECT_SOURCE_DIR}/Thirdparty/DBoW2/lib/libDBoW2.so")
 
 add_library(${PROJECT_NAME} SHARED ${SRCS_ANYFEATURE})
 
+# Include directories
 target_include_directories(${PROJECT_NAME} PUBLIC
         ${PROJECT_SOURCE_DIR}
         ${PROJECT_SOURCE_DIR}/include
         ${DBoW2_INCLUDE_DIRS}
 )
 
+# Link libraries
 target_link_libraries(${PROJECT_NAME}
         ${OpenCV_LIBRARIES}
         Eigen3::Eigen
@@ -77,24 +85,20 @@ target_link_libraries(${PROJECT_NAME}
         ${brisk_LIBRARIES}
         ${akaze_LIBRARIES}
         ${SiftGPU_LIBRARIES}
-        pango_core
-        pango_display
-        pango_geometry
-        pango_glgeometry
-        pango_image
-        pango_opengl
-        pango_packetstream
-        pango_plot
-        pango_python
-        pango_scene
-        pango_tools
-        pango_vars
-        pango_video
-        pango_windowing
+        ${Pangolin_LIBRARIES}
 )
 
+# Example executables
 add_executable(vslamlab_anyfeature_mono src/vslamlab_anyfeature_mono.cpp)
 target_link_libraries(vslamlab_anyfeature_mono ${PROJECT_NAME})
 
 add_executable(createVocabulary src/createVocabulary.cpp)
 target_link_libraries(createVocabulary ${PROJECT_NAME})
+
+# Install targets and headers
+install(TARGETS ${PROJECT_NAME} vslamlab_anyfeature_mono
+        RUNTIME DESTINATION bin
+        LIBRARY DESTINATION lib
+        ARCHIVE DESTINATION lib)
+
+install(DIRECTORY include/ DESTINATION include)

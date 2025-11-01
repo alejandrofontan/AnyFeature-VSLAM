@@ -21,7 +21,6 @@ build_library() {
   source_folder="$2"
   verbose="$3"
   force_build="$4"
-  install="$5"
 
   build_folder="$source_folder/build"
   bin_folder="$source_folder/bin"
@@ -35,16 +34,10 @@ build_library() {
     echo "[AnyFeature-VSLAM][build.sh] Compile ${library_name} ... "
   	cmake -G Ninja -B $build_folder -S $source_folder -DCMAKE_PREFIX_PATH=$source_folder -DCMAKE_INSTALL_PREFIX=$source_folder
   	cmake --build $build_folder --config Release
-    if [ "$install" = true ]; then
-      ninja install -C "$build_folder"
-    fi
   else
     echo "[AnyFeature-VSLAM][build.sh] Compile ${library_name} (output disabled) ... "
   	cmake -G Ninja -B $build_folder -S $source_folder -DCMAKE_PREFIX_PATH=$source_folder -DCMAKE_INSTALL_PREFIX=$source_folder > /dev/null 2>&1
   	cmake --build $build_folder --config Release > /dev/null 2>&1
-    if [ "$install" = true ]; then
-      ninja install -C $build_folder > /dev/null 2>&1
-    fi
   fi
 }
 
@@ -68,9 +61,9 @@ LIBRARY_DIR=$(dirname "LIBRARY_PATH")
 ## Build DBoW2
 library_name="DBoW2"
 source_folder="${LIBRARY_DIR}/Thirdparty/${library_name}"
-build_library ${library_name} ${source_folder} ${verbose} ${force_build} true
+build_library ${library_name} ${source_folder} ${verbose} ${force_build}
 
 ## Build AnyFeature-VSLAM
 library_name="AnyFeature-VSLAM"
 source_folder="${LIBRARY_DIR}"
-build_library ${library_name} ${source_folder} ${verbose} ${force_build} false
+build_library ${library_name} ${source_folder} ${verbose} ${force_build}
