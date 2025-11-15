@@ -26,3 +26,5 @@ cmake-build-release/
 bin/
 share/
 anyfeature_vocabulary/
+.vscode
+install_anyfeature-dev.txt
