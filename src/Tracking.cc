@@ -38,6 +38,8 @@
 
 #include<mutex>
 
+#include <yaml-cpp/yaml.h>
+
 #include"Feature_orb32.h"
 #include"Feature_brisk48.h"
 #include"Feature_akaze61.h"
@@ -1393,114 +1395,111 @@ void Tracking::InformOnlyTracking(const bool &flag)
 
 void Tracking::loadCameraParameters(const string &strCalibrationPath, const string &strSettingPath){
 
-    // Load camera parameters from settings yaml file
-    cv::FileStorage fCalibration(strCalibrationPath, cv::FileStorage::READ);
-    float fx = fCalibration["Camera0.fx"];
-    float fy = fCalibration["Camera0.fy"];
-    float cx = fCalibration["Camera0.cx"];
-    float cy = fCalibration["Camera0.cy"];
+    YAML::Node settings = YAML::LoadFile(strSettingPath);
+    YAML::Node calibration = YAML::LoadFile(strCalibrationPath);
+    const YAML::Node& cameras = calibration["cameras"];
 
-
-    // Calibration matrix
-    w = fCalibration["Camera0.w"];
-    h = fCalibration["Camera0.h"];
-
-    if(fixImageSize){
-        float ratio = float(w) / float(h);
-        int new_h = (int) sqrt(307200.f / ratio);
-        int new_w = (int) (float(new_h) * ratio);
-        float conv_ratio_h = float(new_h)/float(h);
-        float conv_ratio_w = float(new_w)/float(w);
-
-        w = new_w;
-        h = new_h;
-        fx *= conv_ratio_w;
-        fy *= conv_ratio_h;
-        cx *= conv_ratio_w;
-        cy *= conv_ratio_h;
+    std::string cam_name;
+    cam_name = settings["cam_mono"].as<std::string>();
+    YAML::Node cam{};
+    for (int i{0}; i < cameras.size(); ++i){
+        if (cameras[i]["cam_name"].as<std::string>() == cam_name){
+            cam = cameras[i];
+            break;
+        }
     }
+    
+    mK = (cv::Mat_<float>(3, 3) << cam["focal_length"][0].as<float>(), 0.0f, cam["principal_point"][0].as<float>(),
+            0.0f, cam["focal_length"][1].as<float>(), cam["principal_point"][1].as<float>(),
+            0.0f, 0.0f, 1.0f);
+                
+    w = cam["image_dimension"][0].as<int>();
+    h = cam["image_dimension"][1].as<int>();
 
-    cv::Mat K = cv::Mat::eye(3,3,CV_32F);
-    K.at<float>(0,0) = fx;
-    K.at<float>(1,1) = fy;
-    K.at<float>(0,2) = cx;
-    K.at<float>(1,2) = cy;
-    K.copyTo(mK);
+    // if(fixImageSize){
+    //     float ratio = float(w) / float(h);
+    //     int new_h = (int) sqrt(307200.f / ratio);
+    //     int new_w = (int) (float(new_h) * ratio);
+    //     float conv_ratio_h = float(new_h)/float(h);
+    //     float conv_ratio_w = float(new_w)/float(w);
+
+    //     w = new_w;
+    //     h = new_h;
+    //     fx *= conv_ratio_w;
+    //     fy *= conv_ratio_h;
+    //     cx *= conv_ratio_w;
+    //     cy *= conv_ratio_h;
+    // }
 
     // Distortion coefficients
-    cv::Mat DistCoef(4,1,CV_32F);
-    DistCoef.at<float>(0) = fCalibration["Camera0.k1"];
-    DistCoef.at<float>(1) = fCalibration["Camera0.k2"];
-    DistCoef.at<float>(2) = fCalibration["Camera0.p1"];
-    DistCoef.at<float>(3) = fCalibration["Camera0.p2"];
-    const float k3 = fCalibration["Camera0.k3"];
-    if(k3!=0)
-    {
-        DistCoef.resize(5);
-        DistCoef.at<float>(4) = k3;
+    mDistCoef = cv::Mat::zeros(4,1,CV_32F);
+    if (cam["distortion_type"] && cam["distortion_coefficients"]) {
+        std::vector<float> dist_coeffs_vec = cam["distortion_coefficients"].as<std::vector<float>>();
+        mDistCoef = cv::Mat(dist_coeffs_vec.size(), 1, CV_32F, dist_coeffs_vec.data()).clone(); 
     }
-    DistCoef.copyTo(mDistCoef);
 
     // Camera frequence (hz)
-    fps = fCalibration["Camera0.fps"];
+    fps = cam["fps"].as<float>();
     if(fps == 0)
         fps = fps0;
 
     // RGB order
-    if (!fCalibration["Camera0.RGB"].empty())
-        mbRGB = bool(int(fCalibration["Camera0.RGB"]));
+    bool mbRGB = cam["cam_type"].as<std::string>() != "bgr";
 
     // Load settings file
     cv::FileStorage fSettings(strSettingPath, cv::FileStorage::READ);
 
     // Stereo baseline
-    if(mSensor==System::STEREO || mSensor==System::RGBD)
-    {
-        cout << endl  << "[Tracking.cc] RGB-D/STEREO Parameters: " << strSettingPath << endl;
+    // if(mSensor==System::STEREO || mSensor==System::RGBD)
+    // {
+    //     cout << endl  << "[Tracking.cc] RGB-D/STEREO Parameters: " << strSettingPath << endl;
 
-        mbf = float(fCalibration["Stereo.bf"]) * fx;
-        cout << "- bf: " << mbf << endl;
+    //     mbf = float(fCalibration["Stereo.bf"]) * fx;
+    //     cout << "- bf: " << mbf << endl;
 
-        mThDepth = mbf *(float)fSettings["ThDepth"] / fx;
-        cout << "- Depth Threshold: " << mThDepth << endl;
+    //     mThDepth = mbf *(float)fSettings["ThDepth"] / fx;
+    //     cout << "- Depth Threshold: " << mThDepth << endl;
 
-    }
+    // }
 
-    if(mSensor==System::RGBD)
-        {
-            mDepthMapFactor = float(fCalibration["Depth0.factor"]);
-            cout << "- Depth Map Factor: " << mDepthMapFactor << endl;
-            if(fabs(mDepthMapFactor)<1e-5)
-                mDepthMapFactor=1;
-            else
-                mDepthMapFactor = 1.0f/mDepthMapFactor;
-        }
+    // if(mSensor==System::RGBD)
+    //     {
+    //         mDepthMapFactor = float(fCalibration["Depth0.factor"]);
+    //         cout << "- Depth Map Factor: " << mDepthMapFactor << endl;
+    //         if(fabs(mDepthMapFactor)<1e-5)
+    //             mDepthMapFactor=1;
+    //         else
+    //             mDepthMapFactor = 1.0f/mDepthMapFactor;
+    //     }
 
     // Print camera parameters
-    cout << "\nCamera Parameters: " << endl;
-    cout << "- fx: " << fx << " , fy: " << fy << " , cx: " << cx << " , cy: " << cy << endl;
-    cout << "- k1: " << DistCoef.at<float>(0) << " , k2: " << DistCoef.at<float>(1) << " , p1: " <<
-            DistCoef.at<float>(2) << " , p2: " << DistCoef.at<float>(3);
-    if(DistCoef.rows==5)
-        cout << " , k3: " << DistCoef.at<float>(4);
-    cout << endl;
-
-    cout << "- w: " << w << " , h: " << h << endl;
-    cout << "- fps: " << fps << endl;
-
+    cout << endl << "Camera Parameters: " << endl;
+    cout << "- cam_name: " << cam["cam_name"].as<std::string>() << endl;
+    cout << "- cam_type: " << cam["cam_type"].as<std::string>() << endl;
+    cout << "- cam_model: " << cam["cam_model"].as<std::string>() << endl;
+    if (cam["distortion_type"] && cam["distortion_coefficients"])
+        cout << "- distortion_type: " << cam["distortion_type"].as<std::string>() << endl;
+    cout << "- fx: " << mK.at<float>(0,0) << endl;
+    cout << "- fy: " << mK.at<float>(1,1) << endl;
+    cout << "- cx: " << mK.at<float>(0,2) << endl;
+    cout << "- cy: " << mK.at<float>(1,2) << endl;
+    if (cam["distortion_type"] && cam["distortion_coefficients"]){
+        cout << "- distortion_coefficients: " << mDistCoef.t() << endl;
+    }
+    cout << "- fps: " << cam["fps"].as<float>() << endl;
     if(mbRGB)
         cout << "- color order: RGB (ignored if grayscale)" << endl;
     else
         cout << "- color order: BGR (ignored if grayscale)" << endl;
 
-    if(mSensor == System::STEREO || mSensor == System::RGBD) {
-        cout << "mbf: " << mbf << endl;
-        cout << "Depth Threshold (Close/Far Points): " << mThDepth << endl;
-    }
-    if(mSensor == System::RGBD)
-    {
-        cout << "mDepthMapFactor: " << mDepthMapFactor << endl;
-    }
+    // if(mSensor == System::STEREO || mSensor == System::RGBD) {
+    //     cout << "mbf: " << mbf << endl;
+    //     cout << "Depth Threshold (Close/Far Points): " << mThDepth << endl;
+    // }
+    // if(mSensor == System::RGBD)
+    // {
+    //     cout << "mDepthMapFactor: " << mDepthMapFactor << endl;
+    // }
 }
 
 shared_ptr<FeatureExtractor> Tracking::getFeatureExtractor(const int& scaleNumFeaturesMonocular_,

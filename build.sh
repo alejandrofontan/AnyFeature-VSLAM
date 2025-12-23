@@ -52,6 +52,10 @@ do
     if [ "$input" = "-v" ]; then
   	verbose=true
     fi
+    if [ "$input" = "-fv" ] || [ "$input" = "-vf" ]; then
+  	verbose=true
+    force_build=true
+    fi
 done
 
 # Baseline Dir

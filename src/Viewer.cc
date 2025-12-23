@@ -21,6 +21,7 @@
 #include "Viewer.h"
 #include "Utils.h"
 #include <pangolin/pangolin.h>
+#include <yaml-cpp/yaml.h>
 
 #include <mutex>
 
@@ -36,20 +37,27 @@ Viewer::Viewer(std::shared_ptr<System> system, std::shared_ptr<FrameDrawer> fram
     featureTypes(featureTypes)
 {
 
-    cv::FileStorage fCalibration(strCalibrationPath, cv::FileStorage::READ);
+    YAML::Node settings = YAML::LoadFile(strSettingPath);
+    YAML::Node calibration = YAML::LoadFile(strCalibrationPath);
+    const YAML::Node& cameras = calibration["cameras"];
 
-    float fps = fCalibration["Camera0.fps"];
+    std::string cam_name;
+    cam_name = settings["cam_mono"].as<std::string>();
+    YAML::Node cam{};
+    for (int i{0}; i < cameras.size(); ++i){
+        if (cameras[i]["cam_name"].as<std::string>() == cam_name){
+            cam = cameras[i];
+            break;
+        }
+    }
+
+    float fps = cam["fps"].as<float>();
     if(fps<1)
         fps=30;
     mT = 1e3/fps;
 
-    imageWidth = fCalibration["Camera0.w"];
-    imageHeight = fCalibration["Camera0.h"];
-    if(imageWidth<1 || imageHeight<1)
-    {
-        imageWidth = 640;
-        imageHeight = 480;
-    }
+    imageWidth = cam["image_dimension"][0].as<int>();
+    imageHeight = cam["image_dimension"][1].as<int>();
 
     cout << endl << "[Viewer.cc] Camera Parameters: " << strCalibrationPath << endl;
     cout << "- w: " << imageWidth << endl;

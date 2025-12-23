@@ -1,24 +1,3 @@
-/**
-* This file is part of ORB-SLAM2.
-*
-* Copyright (C) 2014-2016 Raúl Mur-Artal <raulmur at unizar dot es> (University of Zaragoza)
-* For more information see <https://github.com/raulmur/ORB_SLAM2>
-*
-* ORB-SLAM2 is free software: you can redistribute it and/or modify
-* it under the terms of the GNU General Public License as published by
-* the Free Software Foundation, either version 3 of the License, or
-* (at your option) any later version.
-*
-* ORB-SLAM2 is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-* GNU General Public License for more details.
-*
-* You should have received a copy of the GNU General Public License
-* along with ORB-SLAM2. If not, see <http://www.gnu.org/licenses/>.
-*/
-
-
 #include<iostream>
 #include<algorithm>
 #include<fstream>
@@ -36,7 +15,8 @@ namespace ANYFEATURE_VSLAM{
 
 
 void LoadImages(const string &pathToSequence, const string &rgb_csv,
-                vector<string> &imageFilenames, vector<ANYFEATURE_VSLAM::Seconds> &timestamps);
+                vector<string> &imageFilenames, vector<ANYFEATURE_VSLAM::Seconds> &timestamps,
+                const string cam_name = "rgb0");
 std::string paddingZeros(const std::string& number, const size_t numberOfZeros = 5);
 
 void removeSubstring(std::string& str, const std::string& substring) {
@@ -45,6 +25,7 @@ void removeSubstring(std::string& str, const std::string& substring) {
         str.erase(pos, substring.length());
     }
 }
+
 
 int main(int argc, char **argv)
 {
@@ -209,38 +190,67 @@ int main(int argc, char **argv)
     return 0;
 }
 
+std::vector<std::string> split(const std::string& s, char delimiter) {
+    std::vector<std::string> tokens;
+    std::string token;
+    std::istringstream tokenStream(s);
+    while (std::getline(tokenStream, token, delimiter)) {
+        // Simple trim for leading/trailing whitespace, often needed in real-world CSVs
+        token.erase(0, token.find_first_not_of(" \t\n\r"));
+        token.erase(token.find_last_not_of(" \t\n\r") + 1);
+        tokens.push_back(token);
+    }
+    return tokens;
+}
+
 void LoadImages(const string &pathToSequence, const string &rgb_csv,
-                vector<string> &imageFilenames, vector<ANYFEATURE_VSLAM::Seconds> &timestamps)
+                vector<string> &imageFilenames, vector<ANYFEATURE_VSLAM::Seconds> &timestamps,
+                const string cam_name)
 {
 
     imageFilenames.clear();
     timestamps.clear();
-
+    
     std::ifstream in(rgb_csv);
-
     std::string line;
 
-    // Drop the header 
-    if (!std::getline(in, line)) return;
+    // Read and map the header row to find indices
+    if (!std::getline(in, line)) return; 
+    if (!line.empty() && line.back() == '\r') line.pop_back();
 
-    // Read data lines
+    std::vector<std::string> headers = split(line, ',');
+    std::map<std::string, int> col_map;
+    for (size_t i = 0; i < headers.size(); ++i) {
+        col_map[headers[i]] = i;
+    }
+
+    // Required headers
+    const std::string header_ts = "ts_" + cam_name;
+    const std::string header_rgb0 = "path_" + cam_name;
+
+    // Safely get indices
+    auto get_index = [&](const std::string& key) -> int {
+        return col_map[key];
+    };
+
+    int ts_idx = get_index(header_ts);
+    int rgb0_idx = get_index(header_rgb0);   
+
+    // Read and process data lines using fixed indices
     while (std::getline(in, line)) {
         if (line.empty()) continue;
-        if (!line.empty() && line.back() == '\r') line.pop_back(); // handle CRLF
+        if (!line.empty() && line.back() == '\r') line.pop_back();
 
-        // Replace commas with spaces so operator>> splits cleanly
-        std::replace(line.begin(), line.end(), ',', ' ');
+        std::vector<std::string> tokens = split(line, ',');
+        
+        // Assign variables using indices, regardless of column order
+        std::string t_str = tokens[ts_idx];
+        std::string rel_rgb0_path = tokens[rgb0_idx];
 
-        std::stringstream ss(line);
+        ANYFEATURE_VSLAM::Seconds t = std::stod(t_str);
 
-        ANYFEATURE_VSLAM::Seconds t;
-        std::string rel_rgb_path;
-
-        // Extract the first two columns (timestamp and rgb path). Ignore the rest.
-        if (ss >> t && ss >> rel_rgb_path) {
-            timestamps.push_back(t);
-            imageFilenames.push_back(pathToSequence + "/" + rel_rgb_path);
-        }
+        timestamps.push_back(t);
+        imageFilenames.push_back(pathToSequence + "/" + rel_rgb0_path);
     }
 }
 
