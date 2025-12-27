@@ -412,7 +412,7 @@ void System::SaveTrajectoryTUM(const string &filename)
 }
 
 
-void System::SaveKeyFrameTrajectoryTUM(const string &filename)
+void System::SaveKeyFrameTrajectoryVSLAMLAB(const string &filename)
 {
     cout << endl << "Saving keyframe trajectory to " << filename << " ..." << endl;
 
@@ -427,7 +427,7 @@ void System::SaveKeyFrameTrajectoryTUM(const string &filename)
     f.imbue(std::locale::classic());
 
     // CSV header
-    f << "timestamp,tx,ty,tz,qx,qy,qz,qw\n";
+    f << "ts (ns),tx (m),ty (m),tz (m),qx,qy,qz,qw\n";
 
     for(size_t i=0; i<vpKFs.size(); i++)
     {
@@ -442,7 +442,8 @@ void System::SaveKeyFrameTrajectoryTUM(const string &filename)
         Eigen::Quaternionf q(R);
         vec3f t = pKF->GetCameraCenter();
 
-        f << std::fixed << std::setprecision(9) << pKF->mTimeStamp << ','
+        long long ts_ns = static_cast<long long>(std::round(pKF->mTimeStamp * 1e9));
+        f << std::fixed << std::setprecision(9) << ts_ns << ','
           << std::scientific << std::setprecision(7)
           << static_cast<double>(t(0)) << ','
           << static_cast<double>(t(1)) << ','
