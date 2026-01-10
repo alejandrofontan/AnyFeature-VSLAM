@@ -68,17 +68,17 @@ using namespace std;
 
 namespace ANYFEATURE_VSLAM
 {
-#ifdef VANILLA_ORB_SLAM2
+// #ifdef VANILLA_ORB_SLAM2
 const int PATCH_SIZE = 31;
 const int HALF_PATCH_SIZE = 15;
 const int EDGE_THRESHOLD = 19;
-#else
-const int PATCH_SIZE = 0;
-const int HALF_PATCH_SIZE = 0;
-const int EDGE_THRESHOLD = 0;
-#endif
+// #else
+// const int PATCH_SIZE = 0;
+// const int HALF_PATCH_SIZE = 0;
+// const int EDGE_THRESHOLD = 0;
+// #endif
 
-#ifdef VANILLA_ORB_SLAM2
+// #ifdef VANILLA_ORB_SLAM2
     FeatureExtractor::FeatureExtractor(const int& nfeatures_, shared_ptr<FeatureExtractorSettings>& settings_):
     nfeatures(nfeatures_), settings(settings_)
 {
@@ -138,7 +138,7 @@ const int EDGE_THRESHOLD = 0;
         ++v0;
     }
 }
-#endif
+// #endif
 
 static float IC_Angle(const Mat& image, Point2f pt,  const vector<int> & u_max)
 {

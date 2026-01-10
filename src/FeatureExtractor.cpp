@@ -37,18 +37,18 @@ ANYFEATURE_VSLAM::FeatureExtractorSettings::FeatureExtractorSettings(
     nOctaves = GetDetectorNominalNumOctaves();
     detectTh = GetDetectorNominalThreshold();
 
-#ifdef VANILLA_ORB_SLAM2
+// #ifdef VANILLA_ORB_SLAM2
     ON_automaticTuning = false;
     scaleFactor = 1.2f;
     nOctaves = 8;
     iniThFAST = 20;
     minThFAST = 7;
     detectTh = float(iniThFAST);
-#else
-    ON_automaticTuning = true;
-    iniThFAST = 20;
-    minThFAST = 7;
-#endif
+// #else
+//     ON_automaticTuning = true;
+//     iniThFAST = 20;
+//     minThFAST = 7;
+// #endif
     maxKeyPtSize0  = pow(scaleFactorOrb,float(nOctavesOrb - 1.0));
     maxKeyPtSigma0 = pow(scaleFactorOrb,float(nOctavesOrb - 1.0));
     maxKeyPtSize = pow(scaleFactorOrb,float(nOctavesOrb - 1.0));
@@ -70,64 +70,64 @@ ANYFEATURE_VSLAM::FeatureExtractorSettings::FeatureExtractorSettings(
     maxKeyPtSigma0 = pow(scaleFactor,float(nOctaves - 1.0));*/
 }
 
-#ifndef VANILLA_ORB_SLAM2
-ANYFEATURE_VSLAM::FeatureExtractor::FeatureExtractor(const int& nfeatures_, shared_ptr<FeatureExtractorSettings>& settings_):
-        settings(settings_), nfeatures(nfeatures_){
+// #ifndef VANILLA_ORB_SLAM2
+// ANYFEATURE_VSLAM::FeatureExtractor::FeatureExtractor(const int& nfeatures_, shared_ptr<FeatureExtractorSettings>& settings_):
+//         settings(settings_), nfeatures(nfeatures_){
 
-    mvScaleFactor.resize(settings->nOctaves);
-    mvLevelSigma2.resize(settings->nOctaves);
-    mvScaleFactor[0]=1.0f;
-    mvLevelSigma2[0]=1.0f;
-    for(int i=1; i<settings->nOctaves; i++)
-    {
-        mvScaleFactor[i]=mvScaleFactor[i-1]*settings->scaleFactor;
-        mvLevelSigma2[i]=mvScaleFactor[i]*mvScaleFactor[i];
-    }
+//     mvScaleFactor.resize(settings->nOctaves);
+//     mvLevelSigma2.resize(settings->nOctaves);
+//     mvScaleFactor[0]=1.0f;
+//     mvLevelSigma2[0]=1.0f;
+//     for(int i=1; i<settings->nOctaves; i++)
+//     {
+//         mvScaleFactor[i]=mvScaleFactor[i-1]*settings->scaleFactor;
+//         mvLevelSigma2[i]=mvScaleFactor[i]*mvScaleFactor[i];
+//     }
 
-    mvInvScaleFactor.resize(settings->nOctaves);
-    mvInvLevelSigma2.resize(settings->nOctaves);
-    for(int i=0; i<settings->nOctaves; i++)
-    {
-        mvInvScaleFactor[i]=1.0f/mvScaleFactor[i];
-        mvInvLevelSigma2[i]=1.0f/mvLevelSigma2[i];
-    }
+//     mvInvScaleFactor.resize(settings->nOctaves);
+//     mvInvLevelSigma2.resize(settings->nOctaves);
+//     for(int i=0; i<settings->nOctaves; i++)
+//     {
+//         mvInvScaleFactor[i]=1.0f/mvScaleFactor[i];
+//         mvInvLevelSigma2[i]=1.0f/mvLevelSigma2[i];
+//     }
 
-    mvImagePyramid.resize(settings->nOctaves);
+//     mvImagePyramid.resize(settings->nOctaves);
 
-    mnFeaturesPerLevel.resize(settings->nOctaves);
-    float factor = 1.0f / settings->scaleFactor;
-    float nDesiredFeaturesPerScale = float(nfeatures) * (1 - factor)/(1 - (float)pow((double)factor, (double)settings->nOctaves));
+//     mnFeaturesPerLevel.resize(settings->nOctaves);
+//     float factor = 1.0f / settings->scaleFactor;
+//     float nDesiredFeaturesPerScale = float(nfeatures) * (1 - factor)/(1 - (float)pow((double)factor, (double)settings->nOctaves));
 
-    int sumFeatures = 0;
-    for( int level = 0; level < settings->nOctaves-1; level++ )
-    {
-        mnFeaturesPerLevel[level] = cvRound(nDesiredFeaturesPerScale);
-        sumFeatures += mnFeaturesPerLevel[level];
-        nDesiredFeaturesPerScale *= factor;
-    }
-    mnFeaturesPerLevel[settings->nOctaves-1] = std::max(nfeatures - sumFeatures, 0);
-}
+//     int sumFeatures = 0;
+//     for( int level = 0; level < settings->nOctaves-1; level++ )
+//     {
+//         mnFeaturesPerLevel[level] = cvRound(nDesiredFeaturesPerScale);
+//         sumFeatures += mnFeaturesPerLevel[level];
+//         nDesiredFeaturesPerScale *= factor;
+//     }
+//     mnFeaturesPerLevel[settings->nOctaves-1] = std::max(nfeatures - sumFeatures, 0);
+// }
 
-void ANYFEATURE_VSLAM::FeatureExtractor::operator()(const Image& img,
-                                             std::vector<cv::KeyPoint>& keypoints, cv::Mat& descriptors,
-                                             std::vector<mat2f>& keyPtsSigma2, std::vector<mat2f>& keyPtsInf, std::vector<float>& keyPtsSize)
-{
-    initializeExtractor(img);
-    if(settings->ON_automaticTuning)
-        automaticTuning(img);
-    detectAndCompute(img, keypoints, descriptors);
-    computeSize(keyPtsSize,keypoints);
-    computeSigma(keyPtsSigma2, keyPtsInf,keyPtsSize,keypoints,img,CovarianceMethod::SIZE);
-}
+// void ANYFEATURE_VSLAM::FeatureExtractor::operator()(const Image& img,
+//                                              std::vector<cv::KeyPoint>& keypoints, cv::Mat& descriptors,
+//                                              std::vector<mat2f>& keyPtsSigma2, std::vector<mat2f>& keyPtsInf, std::vector<float>& keyPtsSize)
+// {
+//     initializeExtractor(img);
+//     if(settings->ON_automaticTuning)
+//         automaticTuning(img);
+//     detectAndCompute(img, keypoints, descriptors);
+//     computeSize(keyPtsSize,keypoints);
+//     computeSigma(keyPtsSigma2, keyPtsInf,keyPtsSize,keypoints,img,CovarianceMethod::SIZE);
+// }
 
-void ANYFEATURE_VSLAM::FeatureExtractor::operator()(const Image& img, std::vector<cv::KeyPoint>& keypoints, cv::Mat& descriptors)
-{
-    initializeExtractor(img);
-    if(settings->ON_automaticTuning)
-        automaticTuning(img);
-    detectAndCompute(img, keypoints, descriptors);
-}
-#endif
+// void ANYFEATURE_VSLAM::FeatureExtractor::operator()(const Image& img, std::vector<cv::KeyPoint>& keypoints, cv::Mat& descriptors)
+// {
+//     initializeExtractor(img);
+//     if(settings->ON_automaticTuning)
+//         automaticTuning(img);
+//     detectAndCompute(img, keypoints, descriptors);
+// }
+// #endif
 
 void ANYFEATURE_VSLAM::FeatureExtractor::computeSize(std::vector<float>& keyPtsSize, const std::vector<cv::KeyPoint>& keypoints){
     keyPtsSize.clear();

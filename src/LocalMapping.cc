@@ -691,10 +691,10 @@ void LocalMapping::KeyFrameCulling()
                             Keyframe keyframe_i = obs.second->projKeyframe;
                             if(keyframe_i->keyId == pKF->keyId)
                                 continue;
-#ifndef VANILLA_ORB_SLAM2
+// #ifndef VANILLA_ORB_SLAM2
                             if(keyframe_i->isBad())
                                 continue;
-#endif
+// #endif
                             const float keyPtSize_i = keyframe_i->GetKeyPtSize(obs.second->projIndex);
 
                             if(keyPtSize_i <= keyPtSize * keyframe_i->sizeTolerance)

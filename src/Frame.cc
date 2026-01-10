@@ -242,12 +242,12 @@ void Frame::AssignFeaturesToGrid()
 void Frame::ExtractFeatures(int flag, const Image & img)
 {
     if(flag==0){
-#ifdef VANILLA_ORB_SLAM2
+// #ifdef VANILLA_ORB_SLAM2
         (*featureExtractorLeft)(img,mvKeys,mDescriptors,keyPtsSigma2,keyPtsInf,keyPtsSize,true);
-#else
+// #else
 
-        (*featureExtractorLeft)(img,mvKeys,mDescriptors,keyPtsSigma2,keyPtsInf,keyPtsSize);
-#endif
+//         (*featureExtractorLeft)(img,mvKeys,mDescriptors,keyPtsSigma2,keyPtsInf,keyPtsSize);
+// #endif
         maxKeyPtSize = featureExtractorLeft->GetMaxKeyPtSize();
         maxKeyPtSigma = featureExtractorLeft->GetMaxKeyPtSigma();
     }

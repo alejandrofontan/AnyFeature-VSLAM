@@ -47,17 +47,17 @@ using namespace std;
 namespace ANYFEATURE_VSLAM
 {
 
-#ifdef VANILLA_ORB_SLAM2
+// #ifdef VANILLA_ORB_SLAM2
 Descriptor_Distance_Type FeatureMatcher::TH_HIGH = Descriptor_Distance_Type(100);
 Descriptor_Distance_Type FeatureMatcher::TH_LOW = Descriptor_Distance_Type(50);
 Descriptor_Distance_Type FeatureMatcher::descDistTh_high_reloc = Descriptor_Distance_Type(100);
 Descriptor_Distance_Type FeatureMatcher::descDistTh_low_reloc = Descriptor_Distance_Type(64);
-#else
-Descriptor_Distance_Type FeatureMatcher::TH_HIGH = Descriptor_Distance_Type(0.0);
-Descriptor_Distance_Type FeatureMatcher::TH_LOW = Descriptor_Distance_Type(0.0);
-Descriptor_Distance_Type FeatureMatcher::descDistTh_high_reloc = Descriptor_Distance_Type(0.0);
-Descriptor_Distance_Type FeatureMatcher::descDistTh_low_reloc = Descriptor_Distance_Type(0.0);
-#endif
+// #else
+// Descriptor_Distance_Type FeatureMatcher::TH_HIGH = Descriptor_Distance_Type(0.0);
+// Descriptor_Distance_Type FeatureMatcher::TH_LOW = Descriptor_Distance_Type(0.0);
+// Descriptor_Distance_Type FeatureMatcher::descDistTh_high_reloc = Descriptor_Distance_Type(0.0);
+// Descriptor_Distance_Type FeatureMatcher::descDistTh_low_reloc = Descriptor_Distance_Type(0.0);
+// #endif
 
 VerbosityLevel FeatureMatcher::verbosity{MEDIUM};
 
@@ -400,12 +400,12 @@ int FeatureMatcher::SearchForInitialization(Frame &F1, Frame &F2, vector<cv::Poi
                                             const DescriptorType& descriptorType)
 {
 
-#ifndef VANILLA_ORB_SLAM2
-    {
+// #ifndef VANILLA_ORB_SLAM2
+//     {
 
-        //static size_t frame_id_0 = 0;
-        static vector<Descriptor_Distance_Type> matchDistances;
-        static vector<int> numCandidates;
+//         //static size_t frame_id_0 = 0;
+//         static vector<Descriptor_Distance_Type> matchDistances;
+//         static vector<int> numCandidates;
 /*
         //if(F1.mnId != frame_id_0){
             frame_id_0 = F1.mnId;
@@ -473,8 +473,8 @@ int FeatureMatcher::SearchForInitialization(Frame &F1, Frame &F2, vector<cv::Poi
 */
         //setDescriptorDistanceThresholds(matchDistances,numCandidates,descriptorType);
         //terminate();
-    }
-#endif
+//     }
+// #endif
 
     vnMatches12 = vector<int>(F1.mvKeysUn.size(),-1);
 
@@ -1531,9 +1531,9 @@ Descriptor_Distance_Type FeatureMatcher::DescriptorDistance(const cv::Mat &a, co
 }
 
 void FeatureMatcher::setDescriptorDistanceThresholds(const string &feature_settings_yaml_file) {
-#ifdef VANILLA_ORB_SLAM2
+// #ifdef VANILLA_ORB_SLAM2
         return;
-#endif
+// #endif
     cv::FileStorage fSettings(feature_settings_yaml_file, cv::FileStorage::READ);
     const float matchingTh = fSettings["FeatureMatcher.matchingTh"];
     cout << endl  << "Loading Feature Matcher Settings from : " << feature_settings_yaml_file << endl;
@@ -1545,9 +1545,9 @@ void FeatureMatcher::setDescriptorDistanceThresholds(const string &feature_setti
 }
 void FeatureMatcher::setDescriptorDistanceThresholds(const std::vector<Descriptor_Distance_Type>& descriptorDistances_,
                                                      const std::vector<int>& numCandidates_,const DescriptorType& descriptorType){
-    #ifdef VANILLA_ORB_SLAM2
+    // #ifdef VANILLA_ORB_SLAM2
     return;
-    #endif
+    // #endif
 
     /*if(descriptorDistances_.empty())
         return;*/
