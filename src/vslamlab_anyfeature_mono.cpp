@@ -39,7 +39,6 @@ int main(int argc, char **argv)
     bool verbose{true};
 
     string feature{"orb32"};
-    string feature_settings_yaml_file;
     string path_to_vocabulary_folder("anyfeature_vocabulary");
     bool fixImageSize = false;
 
@@ -100,20 +99,21 @@ int main(int argc, char **argv)
             std::cout << "[vslamlab_anyfeature_mono.cpp] Feature = " << feature << std::endl;
             continue;
         }
-        if (arg.find("feature_yaml:") != std::string::npos) {
-            removeSubstring(arg, "feature_yaml:");
-            feature_settings_yaml_file =  arg;
-            std::cout << "[vslamlab_anyfeature_mono.cpp] Path to feature_yaml = " << feature_settings_yaml_file << std::endl;
-            continue;
-        }
+        // if (arg.find("feature_yaml:") != std::string::npos) {
+        //     removeSubstring(arg, "feature_yaml:");
+        //     feature_settings_yaml_file =  arg;
+        //     std::cout << "[vslamlab_anyfeature_mono.cpp] Path to feature_yaml = " << feature_settings_yaml_file << std::endl;
+        //     continue;
+        // }
     }
     
     // AnyFeature-VSLAM inputs
     int feature_id = get_feature_id(feature);
     auto featureType = FeatureType(feature_id);
 
-    if(feature_settings_yaml_file.empty())
-        feature_settings_yaml_file = "settings/" + feature + "_settings.yaml";
+    std::map<FeatureType, string> feature_settings_yaml_file;
+    feature_settings_yaml_file[FEAT_ORB] = "settings/orb32_settings.yaml";
+    feature_settings_yaml_file[FEAT_AKAZE61] = "settings/akaze61_settings.yaml";
 
     // Retrieve paths to images
     vector<string> imageFilenames{};
@@ -124,7 +124,7 @@ int main(int argc, char **argv)
     size_t nImages = imageFilenames.size();
 
     // Create SLAM system. It initializes all system threads and gets ready to process frames.
-    const vector<FeatureType> featureTypes{featureType};
+    const vector<FeatureType> featureTypes{featureType, FEAT_AKAZE61};
     ANYFEATURE_VSLAM::System SLAM(path_to_vocabulary_folder, 
                                   calibration_yaml, settings_yaml, feature_settings_yaml_file,
                                   ANYFEATURE_VSLAM::System::MONOCULAR,

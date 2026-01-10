@@ -98,6 +98,7 @@ public:
 
 public:
     PtId ptId;
+
     static long unsigned int nNextId;
     long int mnFirstKFid;
     long int mnFirstFrame;

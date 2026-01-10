@@ -37,7 +37,7 @@ namespace ANYFEATURE_VSLAM
 
 System::System(const string &vocabularyFolder,
                const string &strCalibrationFile, const string &strSettingsFile,  
-               const string &feature_settings_yaml_file,
+               const std::map<FeatureType, string>& feature_settings_yaml_file,
                const eSensor sensor,
                const bool activateVisualization,
                const vector<FeatureType>& featureTypes,
@@ -45,6 +45,8 @@ System::System(const string &vocabularyFolder,
                mSensor(sensor), viewer(static_cast<shared_ptr<Viewer>>(nullptr)), mbReset(false),mbActivateLocalizationMode(false),
         mbDeactivateLocalizationMode(false), featureTypes(featureTypes)
 {
+    std::cout << "System::System() called" << std::endl;
+
     // Output welcome message
     cout << "Any-Feature V-SLAM 2024, Alejandro Fontan Villacampa, Queensland University of Technology\n"
     "    Acknowledgments to: Javier Civera and Michael Milford (Any-Feature V-SLAM)\n"
@@ -98,7 +100,7 @@ System::System(const string &vocabularyFolder,
     mapDrawer = make_shared<MapDrawer>(mpMap, strSettingsFile,featureTypes);
 
     // Initialize matching thresholds
-    FeatureMatcher::setDescriptorDistanceThresholds(feature_settings_yaml_file);
+    FeatureMatcher::setDescriptorDistanceThresholds(feature_settings_yaml_file.at(FEAT_ORB));
 
     //Initialize the Tracking thread
     //(it will live in the main thread of execution, the one that called this constructor)
@@ -113,7 +115,7 @@ System::System(const string &vocabularyFolder,
     mptLocalMapping = make_shared<thread>(&ANYFEATURE_VSLAM::LocalMapping::Run, localMapper);
 
     //Initialize the Loop Closing thread and launch
-    loopCloser =  make_shared<LoopClosing>(mpMap, mpKeyFrameDatabase, vocabulary, mSensor!=MONOCULAR);
+    loopCloser =  make_shared<LoopClosing>(mpMap, mpKeyFrameDatabase, vocabulary, mSensor!=MONOCULAR, featureTypes[featureLoopClosure]);
     mptLoopClosing = make_shared<thread>(&ANYFEATURE_VSLAM::LoopClosing::Run, loopCloser);
 
     //Initialize the Viewer thread and launch
@@ -140,104 +142,109 @@ System::System(const string &vocabularyFolder,
 
 mat4f System::TrackStereo(const cv::Mat &imLeft, const cv::Mat &imRight, const double &timestamp)
 {
-    if(mSensor!=STEREO)
-    {
-        cerr << "ERROR: you called TrackStereo but input sensor was not set to STEREO." << endl;
-        exit(-1);
-    }   
+    std::cout << "This function (System::TrackStereo) has not been modified yet to work with AnyFeature-VSLAM"<< endl;
+    std::terminate();
 
-    // Check mode change
-    {
-        unique_lock<mutex> lock(mMutexMode);
-        if(mbActivateLocalizationMode)
-        {
-           localMapper->RequestStop();
+    // if(mSensor!=STEREO)
+    // {
+    //     cerr << "ERROR: you called TrackStereo but input sensor was not set to STEREO." << endl;
+    //     exit(-1);
+    // }   
 
-            // Wait until Local Mapping has effectively stopped
-            while(!localMapper->isStopped())
-            {
-                usleep(1000);
-            }
+    // // Check mode change
+    // {
+    //     unique_lock<mutex> lock(mMutexMode);
+    //     if(mbActivateLocalizationMode)
+    //     {
+    //        localMapper->RequestStop();
 
-            tracker->InformOnlyTracking(true);
-            mbActivateLocalizationMode = false;
-        }
-        if(mbDeactivateLocalizationMode)
-        {
-            tracker->InformOnlyTracking(false);
-            localMapper->Release();
-            mbDeactivateLocalizationMode = false;
-        }
-    }
+    //         // Wait until Local Mapping has effectively stopped
+    //         while(!localMapper->isStopped())
+    //         {
+    //             usleep(1000);
+    //         }
 
-    // Check reset
-    {
-    unique_lock<mutex> lock(mMutexReset);
-    if(mbReset)
-    {
-        tracker->Reset();
-        mbReset = false;
-    }
-    }
+    //         tracker->InformOnlyTracking(true);
+    //         mbActivateLocalizationMode = false;
+    //     }
+    //     if(mbDeactivateLocalizationMode)
+    //     {
+    //         tracker->InformOnlyTracking(false);
+    //         localMapper->Release();
+    //         mbDeactivateLocalizationMode = false;
+    //     }
+    // }
 
-    mat4f Tcw = tracker->GrabImageStereo(imLeft,imRight,timestamp);
+    // // Check reset
+    // {
+    // unique_lock<mutex> lock(mMutexReset);
+    // if(mbReset)
+    // {
+    //     tracker->Reset();
+    //     mbReset = false;
+    // }
+    // }
 
-    unique_lock<mutex> lock2(mMutexState);
-    mTrackingState = tracker->mState;
-    mTrackedMapPoints = tracker->currentFrame.pts;
-    mTrackedKeyPointsUn = tracker->currentFrame.mvKeysUn;
-    return Tcw;
+    // mat4f Tcw = tracker->GrabImageStereo(imLeft,imRight,timestamp);
+
+    // unique_lock<mutex> lock2(mMutexState);
+    // mTrackingState = tracker->mState;
+    // mTrackedMapPoints = tracker->currentFrame.pts;
+    // mTrackedKeyPointsUn = tracker->currentFrame.mvKeysUn;
+    // return Tcw;
 }
 
-    mat4f System::TrackRGBD(const cv::Mat &im, const cv::Mat &depthmap, const double &timestamp)
-{
-    if(mSensor!=RGBD)
-    {
-        cerr << "ERROR: you called TrackRGBD but input sensor was not set to RGBD." << endl;
-        exit(-1);
-    }    
+mat4f System::TrackRGBD(const cv::Mat &im, const cv::Mat &depthmap, const double &timestamp)
+{   
+    std::cout << "This function (System::TrackRGBD) has not been modified yet to work with AnyFeature-VSLAM"<< endl;
+    std::terminate();
+    // if(mSensor!=RGBD)
+    // {
+    //     cerr << "ERROR: you called TrackRGBD but input sensor was not set to RGBD." << endl;
+    //     exit(-1);
+    // }    
 
-    // Check mode change
-    {
-        unique_lock<mutex> lock(mMutexMode);
-        if(mbActivateLocalizationMode)
-        {
-            localMapper->RequestStop();
+    // // Check mode change
+    // {
+    //     unique_lock<mutex> lock(mMutexMode);
+    //     if(mbActivateLocalizationMode)
+    //     {
+    //         localMapper->RequestStop();
 
-            // Wait until Local Mapping has effectively stopped
-            while(!localMapper->isStopped())
-            {
-                usleep(1000);
-            }
+    //         // Wait until Local Mapping has effectively stopped
+    //         while(!localMapper->isStopped())
+    //         {
+    //             usleep(1000);
+    //         }
 
-            tracker->InformOnlyTracking(true);
-            mbActivateLocalizationMode = false;
-        }
-        if(mbDeactivateLocalizationMode)
-        {
-            tracker->InformOnlyTracking(false);
-            localMapper->Release();
-            mbDeactivateLocalizationMode = false;
-        }
-    }
+    //         tracker->InformOnlyTracking(true);
+    //         mbActivateLocalizationMode = false;
+    //     }
+    //     if(mbDeactivateLocalizationMode)
+    //     {
+    //         tracker->InformOnlyTracking(false);
+    //         localMapper->Release();
+    //         mbDeactivateLocalizationMode = false;
+    //     }
+    // }
 
-    // Check reset
-    {
-    unique_lock<mutex> lock(mMutexReset);
-    if(mbReset)
-    {
-        tracker->Reset();
-        mbReset = false;
-    }
-    }
+    // // Check reset
+    // {
+    // unique_lock<mutex> lock(mMutexReset);
+    // if(mbReset)
+    // {
+    //     tracker->Reset();
+    //     mbReset = false;
+    // }
+    // }
 
-    mat4f Tcw = tracker->GrabImageRGBD(im,depthmap,timestamp);
+    // mat4f Tcw = tracker->GrabImageRGBD(im,depthmap,timestamp);
 
-    unique_lock<mutex> lock2(mMutexState);
-    mTrackingState = tracker->mState;
-    mTrackedMapPoints = tracker->currentFrame.pts;
-    mTrackedKeyPointsUn = tracker->currentFrame.mvKeysUn;
-    return Tcw;
+    // unique_lock<mutex> lock2(mMutexState);
+    // mTrackingState = tracker->mState;
+    // mTrackedMapPoints = tracker->currentFrame.pts;
+    // mTrackedKeyPointsUn = tracker->currentFrame.mvKeysUn;
+    // return Tcw;
 }
 
 mat4f System::TrackMonocular(Image &im, const double &timestamp)
@@ -520,13 +527,13 @@ int System::GetTrackingState()
     return mTrackingState;
 }
 
-vector<Pt> System::GetTrackedMapPoints()
+std::map<FeatureType,std::vector<Pt>> System::GetTrackedMapPoints()
 {
     unique_lock<mutex> lock(mMutexState);
     return mTrackedMapPoints;
 }
 
-vector<cv::KeyPoint> System::GetTrackedKeyPointsUn()
+std::map<FeatureType, std::vector<cv::KeyPoint>> System::GetTrackedKeyPointsUn()
 {
     unique_lock<mutex> lock(mMutexState);
     return mTrackedKeyPointsUn;

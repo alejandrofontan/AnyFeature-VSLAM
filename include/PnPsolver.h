@@ -61,7 +61,7 @@ namespace ANYFEATURE_VSLAM
 
 class PnPsolver {
  public:
-  PnPsolver(const Frame &F, const vector<Pt> &vpMapPointMatches);
+  PnPsolver(const Frame &F, const vector<Pt> &vpMapPointMatches, const FeatureType& featureType);
 
   ~PnPsolver();
 

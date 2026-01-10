@@ -36,7 +36,7 @@ class Initializer
 public:
 
     // Fix the reference frame
-    Initializer(const Frame &ReferenceFrame, float sigma_, int iterations);
+    Initializer(const Frame &ReferenceFrame, float sigma_, int iterations, const FeatureType& featureType);
 
     // Computes in parallel a fundamental matrix and a homography
     // Selects a model and tries to recover the motion and the structure from motion
@@ -79,6 +79,8 @@ private:
 
     static void DecomposeE(const mat3f &E, mat3f &R1, mat3f &R2, vec3f &t);
 
+
+    FeatureType featureType;
 
     // Keypoints from Reference Frame (Frame 1)
     vector<cv::KeyPoint> keypoints1;

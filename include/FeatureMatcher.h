@@ -44,42 +44,42 @@ public:
 
     // Search matches between Frame keypoints and projected MapPoints. Returns number of matches
     // Used to track the local map (Tracking)
-    int SearchByProjection(Frame &F, const std::vector<Pt> &vpMapPoints, const float& radiusTh);
+    int SearchByProjection(Frame &F, const std::vector<Pt> &vpMapPoints, const float& radiusTh, const FeatureType& featureType);
 
     // Project MapPoints tracked in last frame into the current frame and search matches.
     // Used to track from previous frame (Tracking)
-    int SearchByProjection(Frame &CurrentFrame, const Frame &LastFrame, const float& radiusTh, const bool bMono);
+    int SearchByProjection(Frame &CurrentFrame, const Frame &LastFrame, const float& radiusTh, const bool bMono, const FeatureType& featureType);
 
     // Project MapPoints seen in KeyFrame into the Frame and search matches.
     // Used in relocalisation (Tracking)
-    int SearchByProjection(Frame &CurrentFrame, Keyframe pKF, const std::set<Pt> &sAlreadyFound, const float& radiusTh, const bool& useHighMatchingThreshold);
+    int SearchByProjection(Frame &CurrentFrame, Keyframe pKF, const std::set<Pt> &sAlreadyFound, const float& radiusTh, const bool& useHighMatchingThreshold, const FeatureType& featureType);
 
     // Project MapPoints using a Similarity Transformation and search matches.
     // Used in loop detection (Loop Closing)
-     int SearchByProjection(Keyframe pKF, const mat4f& Scw, const std::vector<Pt> &vpPoints, std::vector<Pt> &vpMatched, const float& radiusTh);
-
+     int SearchByProjection(Keyframe pKF, const mat4f& Scw, const std::vector<Pt> &vpPoints, std::vector<Pt> &vpMatched, const float& radiusTh, const FeatureType& featureType);
     // Search matches between MapPoints in a KeyFrame and ORB in a Frame.
     // Brute force constrained to ORB that belong to the same vocabulary node (at a certain level)
     // Used in Relocalisation and Loop Detection
-    int SearchByBoW(Keyframe pKF, Frame &F, std::vector<Pt> &vpMapPointMatches);
-    int SearchByBoW(Keyframe pKF1, Keyframe pKF2, std::vector<Pt> &vpMatches12);
+    int SearchByBoW(Keyframe pKF, Frame &F, std::vector<Pt> &vpMapPointMatches, const FeatureType& featureType);
+    int SearchByBoW(Keyframe pKF1, Keyframe pKF2, std::vector<Pt> &vpMatches12, const FeatureType& featureType);
 
     // Matching for the Map Initialization (only used in the monocular case)
-    int SearchForInitialization(Frame &F1, Frame &F2, std::vector<cv::Point2f> &vbPrevMatched, std::vector<int> &vnMatches12, const int& windowSize, const DescriptorType& descriptorType);
+    int SearchForInitialization(Frame &F1, Frame &F2, std::vector<cv::Point2f> &vbPrevMatched, std::vector<int> &vnMatches12, const int& windowSize, 
+        const DescriptorType& descriptorType, const FeatureType& featureType);
 
     // Matching to triangulate new MapPoints. Check Epipolar Constraint.
     int SearchForTriangulation(Keyframe pKF1, Keyframe pKF2, const mat3f& F12,
-                               std::vector<pair<size_t, size_t> > &vMatchedPairs, const bool bOnlyStereo, const DescriptorType& descriptorType);
+                               std::vector<pair<size_t, size_t> > &vMatchedPairs, const bool bOnlyStereo, const DescriptorType& descriptorType, const FeatureType& featureType);
 
     // Search matches between MapPoints seen in KF1 and KF2 transforming by a Sim3 [s12*R12|t12]
     // In the stereo and RGB-D case, s12=1
-    int SearchBySim3(Keyframe pKF1, Keyframe pKF2, std::vector<Pt> &vpMatches12, const float &s12, const mat3f &R12, const vec3f &t12, const float& radiusTh);
+    int SearchBySim3(Keyframe pKF1, Keyframe pKF2, std::vector<Pt> &vpMatches12, const float &s12, const mat3f &R12, const vec3f &t12, const float& radiusTh, const FeatureType& featureType);
 
     // Project MapPoints into KeyFrame and search for duplicated MapPoints.
-    int Fuse(Keyframe pKF, const vector<Pt> &vpMapPoints, const float& radiusTh);
+    int Fuse(Keyframe pKF, const vector<Pt> &vpMapPoints, const float& radiusTh, const FeatureType& featureType);
 
     // Project MapPoints into KeyFrame using a given Sim3 and search for duplicated MapPoints.
-    int Fuse(Keyframe pKF, const mat4f& Scw, const std::vector<Pt> &vpPoints, const float& radiusTh, vector<Pt> &vpReplacePoint);
+    int Fuse(Keyframe pKF, const mat4f& Scw, const std::vector<Pt> &vpPoints, const float& radiusTh, vector<Pt> &vpReplacePoint, const FeatureType& featureType);
 
     static void setDescriptorDistanceThresholds(const std::vector<Descriptor_Distance_Type>& descriptorDistances_, const std::vector<int>& numCandidates_,const DescriptorType& descriptorType);
     static void setDescriptorDistanceThresholds(const string &feature_settings_yaml_file);

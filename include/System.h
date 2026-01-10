@@ -64,7 +64,7 @@ public:
     // Initialize the SLAM system. It launches the Local Mapping, Loop Closing and Viewer threads.
     System(const string &vocabularyFolder,
            const string &strCalibrationFile, const string &strSettingsFile,
-           const string &feature_settings_yaml_file,
+           const std::map<FeatureType, string>& feature_settings_yaml_file,
            const eSensor sensor, const bool activateVisualization,
            const vector<FeatureType>& featureTypes, const bool& fixImageSize = false);
 
@@ -126,8 +126,8 @@ public:
     // Information from most recent processed frame
     // You can call this right after TrackMonocular (or stereo or RGBD)
     int GetTrackingState();
-    std::vector<Pt> GetTrackedMapPoints();
-    std::vector<cv::KeyPoint> GetTrackedKeyPointsUn();
+    std::map<FeatureType,std::vector<Pt>> GetTrackedMapPoints();
+    std::map<FeatureType, std::vector<cv::KeyPoint>> GetTrackedKeyPointsUn();
 
     // AnyFeature-VSLAM statistics
     void SaveStatistics(const std::string &filename);
@@ -135,6 +135,7 @@ public:
     vector<double> trackingTime{};
 
     vector<FeatureType> featureTypes{};
+    int featureLoopClosure{0};
 
 private:
 
@@ -185,8 +186,8 @@ private:
 
     // Tracking state
     int mTrackingState;
-    std::vector<Pt> mTrackedMapPoints;
-    std::vector<cv::KeyPoint> mTrackedKeyPointsUn;
+    std::map<FeatureType,std::vector<Pt>> mTrackedMapPoints;
+    std::map<FeatureType, std::vector<cv::KeyPoint>> mTrackedKeyPointsUn;
     std::mutex mMutexState;
 
     // Fix image size to nominal size 307200 pixels

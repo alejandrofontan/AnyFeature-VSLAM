@@ -64,7 +64,7 @@ namespace ANYFEATURE_VSLAM
 {
 
 
-PnPsolver::PnPsolver(const Frame &F, const vector<Pt> &vpMapPointMatches):
+PnPsolver::PnPsolver(const Frame &F, const vector<Pt> &vpMapPointMatches, const FeatureType& featType):
     pws(0), us(0), alphas(0), pcs(0), maximum_number_of_correspondences(0), number_of_correspondences(0), mnInliersi(0),
     mnIterations(0), mnBestInliers(0), N(0)
 {
@@ -84,10 +84,10 @@ PnPsolver::PnPsolver(const Frame &F, const vector<Pt> &vpMapPointMatches):
         {
             if(!pMP->isBad())
             {
-                const cv::KeyPoint &kp = F.mvKeysUn[i];
+                const cv::KeyPoint &kp = F.mvKeysUn.at(featType)[i];
 
                 mvP2D.push_back(kp.pt);
-                mvSigma2.push_back(F.GetKeyPt1DSigma2(KeypointIndex(i)));
+                mvSigma2.push_back(F.GetKeyPt1DSigma2(KeypointIndex(i), featType));
 
                 vec3f Pos = pMP->GetWorldPos();
                 mvP3Dw.push_back(cv::Point3f(Pos(0),Pos(1), Pos(2)));

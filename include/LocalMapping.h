@@ -74,6 +74,9 @@ public:
 
     vector<double> localMappingTime{};
     vector<FeatureType> featureTypes{};
+    int featureProcessNewKeyframe{0};
+    int featureCreateNewMapPoints{0};
+    int featureSearchInNeighbors{0};
 
 protected:
 

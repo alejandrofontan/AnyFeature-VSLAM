@@ -66,12 +66,12 @@ MapPoint::MapPoint(const vec3f &XYZ_, shared_ptr<Map> pMap, Frame* pFrame, const
     const float dist = PC.norm();
     normalVector = PC / dist;
 
-    const float levelScaleFactor =  pFrame->GetKeyPtSize(idxF);
+    const float levelScaleFactor =  pFrame->GetKeyPtSize(idxF, featureType);
 
     maxDistance = dist * levelScaleFactor;
     minDistance = maxDistance / pFrame->maxKeyPtSize;
 
-    pFrame->mDescriptors.row(idxF).copyTo(mDescriptor);
+    pFrame->mDescriptors[featureType].row(idxF).copyTo(mDescriptor);
 
     // MapPoints can be created from Tracking and Local Mapping. This mutex avoid conflicts with id.
     unique_lock<mutex> lock(mpMap->mMutexPointCreation);
@@ -126,14 +126,14 @@ int MapPoint::GetNumberOfObservations()
 }
 
 void MapPoint::increasePointObservability(Keyframe projKeyframe, const KeypointIndex& projIndex){
-    if(projKeyframe->mvuRight[projIndex] >= 0)
+    if(projKeyframe->mvuRight.at(featureType)[projIndex] >= 0)
         nObs += 2;
     else
         nObs++;
 }
 
 void MapPoint::decreasePointObservability(Keyframe projKeyframe, const KeypointIndex& projIndex){
-    if(projKeyframe->mvuRight[projIndex] >= 0)
+    if(projKeyframe->mvuRight.at(featureType)[projIndex] >= 0)
         nObs-=2;
     else
         nObs--;
@@ -197,7 +197,7 @@ void MapPoint::SetBadFlag()
     for(auto& obs: observations_tmp)
     {
         Keyframe keyframe = obs.second->projKeyframe;
-        keyframe->EraseMapPointMatch(obs.second->projIndex);
+        keyframe->EraseMapPointMatch(obs.second->projIndex, featureType);
     }
 
     mpMap->EraseMapPoint(thisPt());
@@ -241,7 +241,7 @@ void MapPoint::Replace(Pt pMP)
         }
         else
         {
-            keyframe->EraseMapPointMatch(obs.second->projIndex);
+            keyframe->EraseMapPointMatch(obs.second->projIndex, featureType);
         }
     }
     pMP->IncreaseFound(nfound);
@@ -298,7 +298,7 @@ Pt MapPoint::ComputeDistinctiveDescriptors()
     {
         Keyframe projKeyframe = obs.second->projKeyframe;
         if(!projKeyframe->isBad()){
-            descriptors.push_back(projKeyframe->mDescriptors.row(obs.second->projIndex));
+            descriptors.push_back(projKeyframe->mDescriptors.at(featureType).row(obs.second->projIndex));
             projIndexes.push_back(obs.second->projIndex);
             projKeyframes.push_back(projKeyframe);
         }
@@ -400,15 +400,15 @@ void MapPoint::UpdateNormalAndDepth()
 
     vec3f PC = XYZ_ - refKeyframe_->GetCameraCenter();
     const float dist = PC.norm();
-    const float levelScaleFactor =  refKeyframe_->GetKeyPtSize(observations_tmp[refKeyframe_->keyId]->projIndex);
+    const float levelScaleFactor =  refKeyframe_->GetKeyPtSize(observations_tmp[refKeyframe_->keyId]->projIndex, featureType);
 
     KeypointIndex keyPtIdx = observations_tmp[refKeyframe_->keyId]->projIndex;
     {
         unique_lock<mutex> lock3(mMutexPos);
 
         refDistance = dist;
-        refSize  = refKeyframe_->GetKeyPtSize(keyPtIdx);;
-        refSigma = refKeyframe_->GetKeyPt1DSigma(keyPtIdx);
+        refSize  = refKeyframe_->GetKeyPtSize(keyPtIdx, featureType);
+        refSigma = refKeyframe_->GetKeyPt1DSigma(keyPtIdx, featureType);
 
         maxDistance = dist * levelScaleFactor;
         minDistance = maxDistance / refKeyframe_->maxKeyPtSize ;

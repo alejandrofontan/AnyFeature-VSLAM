@@ -141,30 +141,31 @@ void LocalMapping::ProcessNewKeyFrame()
     }
 
     // Compute Bags of Words structures
-    mpCurrentKeyFrame->ComputeBoW();
+    mpCurrentKeyFrame->ComputeBoW(featureTypes[featureProcessNewKeyframe]);
 
     // Associate MapPoints to the new keyframe and update normal and descriptor
-    const vector<Pt> vpMapPointMatches = mpCurrentKeyFrame->GetMapPointMatches();
+    for(const auto& feat: mpCurrentKeyFrame->featureTypes){
+        const vector<Pt> vpMapPointMatches = mpCurrentKeyFrame->GetMapPointMatches(feat);
 
-    for(size_t i=0; i<vpMapPointMatches.size(); i++)
-    {
-        Pt pMP = vpMapPointMatches[i];
-        if(pMP)
+        for(size_t i=0; i<vpMapPointMatches.size(); i++)
         {
-            if(!pMP->isBad())
+            Pt pMP = vpMapPointMatches[i];
+            if(pMP)
             {
-                if(!pMP->IsInKeyFrame(mpCurrentKeyFrame))
+                if(!pMP->isBad())
                 {
-                    pMP->AddObservation(mpCurrentKeyFrame, i);
-                }
-                else // this can only happen for new stereo points inserted by the Tracking
-                {
-                    mlpRecentAddedMapPoints.push_back(pMP);
+                    if(!pMP->IsInKeyFrame(mpCurrentKeyFrame))
+                    {
+                        pMP->AddObservation(mpCurrentKeyFrame, i);
+                    }
+                    else // this can only happen for new stereo points inserted by the Tracking
+                    {
+                        mlpRecentAddedMapPoints.push_back(pMP);
+                    }
                 }
             }
-        }
-    }    
-
+        }    
+    }
     // Update links in the Covisibility Graph
     mpCurrentKeyFrame->UpdateConnections();
 
@@ -230,7 +231,7 @@ void LocalMapping::MapPointCulling()
 
 void LocalMapping::CreateNewMapPoints()
 {
-    const FeatureType featureType = featureTypes[0];
+    const FeatureType featureType = featureTypes[featureCreateNewMapPoints];
     const KeypointType keypointType = GetKeypointType(featureType);
     const DescriptorType descriptorType = GetDescriptorType(featureType);
 
@@ -294,7 +295,7 @@ void LocalMapping::CreateNewMapPoints()
         // Search matches that fullfil epipolar constraint
         vector<pair<size_t,size_t> > vMatchedIndices;
 
-        matcher.SearchForTriangulation(mpCurrentKeyFrame,pKF2,F12,vMatchedIndices,false, descriptorType);
+        matcher.SearchForTriangulation(mpCurrentKeyFrame,pKF2,F12,vMatchedIndices,false, descriptorType, featureType);
 
         mat3f Rcw2 = pKF2->GetRotation();
         mat3f Rwc2 = Rcw2.transpose();
@@ -317,12 +318,12 @@ void LocalMapping::CreateNewMapPoints()
             const int &idx1 = vMatchedIndices[ikp].first;
             const int &idx2 = vMatchedIndices[ikp].second;
 
-            const cv::KeyPoint &kp1 = mpCurrentKeyFrame->mvKeysUn[idx1];
-            const float kp1_ur=mpCurrentKeyFrame->mvuRight[idx1];
+            const cv::KeyPoint &kp1 = mpCurrentKeyFrame->mvKeysUn.at(featureType)[idx1];
+            const float kp1_ur=mpCurrentKeyFrame->mvuRight.at(featureType)[idx1];
             bool bStereo1 = kp1_ur>=0;
 
-            const cv::KeyPoint &kp2 = pKF2->mvKeysUn[idx2];
-            const float kp2_ur = pKF2->mvuRight[idx2];
+            const cv::KeyPoint &kp2 = pKF2->mvKeysUn.at(featureType)[idx2];
+            const float kp2_ur = pKF2->mvuRight.at(featureType)[idx2];
             bool bStereo2 = kp2_ur>=0;
 
             // Check parallax between rays
@@ -338,9 +339,9 @@ void LocalMapping::CreateNewMapPoints()
             float cosParallaxStereo2 = cosParallaxStereo;
 
             if(bStereo1)
-                cosParallaxStereo1 = cos(2*atan2(mpCurrentKeyFrame->mb/2,mpCurrentKeyFrame->mvDepth[idx1]));
+                cosParallaxStereo1 = cos(2*atan2(mpCurrentKeyFrame->mb/2,mpCurrentKeyFrame->mvDepth.at(featureType)[idx1]));
             else if(bStereo2)
-                cosParallaxStereo2 = cos(2*atan2(pKF2->mb/2,pKF2->mvDepth[idx2]));
+                cosParallaxStereo2 = cos(2*atan2(pKF2->mb/2,pKF2->mvDepth.at(featureType)[idx2]));
 
             cosParallaxStereo = min(cosParallaxStereo1,cosParallaxStereo2);
 
@@ -392,7 +393,7 @@ void LocalMapping::CreateNewMapPoints()
                 continue;
 
             //Check reprojection error in first keyframe
-            const float &sigmaSquare1 = mpCurrentKeyFrame->GetKeyPt1DSigma2(idx1);
+            const float &sigmaSquare1 = mpCurrentKeyFrame->GetKeyPt1DSigma2(idx1, featureType);
             const float x1 = Rcw1.row(0).dot(x3D) + tcw1(0);
             const float y1 = Rcw1.row(1).dot(x3D) + tcw1(1);
             const float invz1 = 1.0f / z1;
@@ -419,7 +420,7 @@ void LocalMapping::CreateNewMapPoints()
             }
 
             //Check reprojection error in second keyframe
-            const float sigmaSquare2 = pKF2->GetKeyPt1DSigma2(idx2);
+            const float sigmaSquare2 = pKF2->GetKeyPt1DSigma2(idx2, featureType);
             const float x2 = Rcw2.row(0).dot(x3D) + tcw2(0);
             const float y2 = Rcw2.row(1).dot(x3D) + tcw2(1);
             const float invz2 = 1.0f / z2;
@@ -455,7 +456,7 @@ void LocalMapping::CreateNewMapPoints()
                 continue;
 
             const float ratioDist = dist2/dist1;
-            const float ratioOctave = mpCurrentKeyFrame->GetKeyPtSize(idx1) / pKF2->GetKeyPtSize(idx2);
+            const float ratioOctave = mpCurrentKeyFrame->GetKeyPtSize(idx1, featureType) / pKF2->GetKeyPtSize(idx2, featureType);
 
             if(ratioDist * ratioFactor < ratioOctave || ratioDist > ratioOctave * ratioFactor)
                 continue;
@@ -474,6 +475,8 @@ void LocalMapping::CreateNewMapPoints()
 
 void LocalMapping::SearchInNeighbors()
 {
+    const FeatureType featureType = featureTypes[featureSearchInNeighbors];
+
     // Retrieve neighbor keyframes
     int nn = 10;
     if(mbMonocular)
@@ -502,12 +505,12 @@ void LocalMapping::SearchInNeighbors()
 
     // Search matches by projection from current KF in target KFs
     FeatureMatcher matcher;
-    vector<Pt> vpMapPointMatches = mpCurrentKeyFrame->GetMapPointMatches();
+    vector<Pt> vpMapPointMatches = mpCurrentKeyFrame->GetMapPointMatches(featureType);
     for(vector<Keyframe >::iterator vit=vpTargetKFs.begin(), vend=vpTargetKFs.end(); vit!=vend; vit++)
     {
         Keyframe  pKFi = *vit;
 
-        matcher.Fuse(pKFi,vpMapPointMatches,3.0f);
+        matcher.Fuse(pKFi,vpMapPointMatches,3.0f, featureType);
     }
 
     // Search matches by projection from target KFs in current KF
@@ -518,7 +521,7 @@ void LocalMapping::SearchInNeighbors()
     {
         Keyframe  pKFi = *vitKF;
 
-        vector<Pt> vpMapPointsKFi = pKFi->GetMapPointMatches();
+        vector<Pt> vpMapPointsKFi = pKFi->GetMapPointMatches(featureType);
 
         for(vector<Pt>::iterator vitMP=vpMapPointsKFi.begin(), vendMP=vpMapPointsKFi.end(); vitMP!=vendMP; vitMP++)
         {
@@ -532,11 +535,11 @@ void LocalMapping::SearchInNeighbors()
         }
     }
 
-    matcher.Fuse(mpCurrentKeyFrame,vpFuseCandidates,3.0f);
+    matcher.Fuse(mpCurrentKeyFrame,vpFuseCandidates,3.0f, featureType);
 
 
     // Update points
-    vpMapPointMatches = mpCurrentKeyFrame->GetMapPointMatches();
+    vpMapPointMatches = mpCurrentKeyFrame->GetMapPointMatches(featureType);
     for(size_t i=0, iend=vpMapPointMatches.size(); i<iend; i++)
     {
         Pt pMP=vpMapPointMatches[i];
@@ -650,6 +653,7 @@ void LocalMapping::InterruptBA()
 
 void LocalMapping::KeyFrameCulling()
 {
+
     // Check redundant keyframes (only local keyframes)
     // A keyframe is considered redundant if the 90% of the MapPoints it sees, are seen
     // in at least other 3 keyframes (in the same or finer scale)
@@ -659,84 +663,89 @@ void LocalMapping::KeyFrameCulling()
     for(vector<Keyframe >::iterator vit=vpLocalKeyFrames.begin(), vend=vpLocalKeyFrames.end(); vit!=vend; vit++)
     {
         Keyframe  pKF = *vit;
-        if(pKF->keyId == 0)
-            continue;
-        const vector<Pt> vpMapPoints = pKF->GetMapPointMatches();
+        for(const auto feat: pKF->featureTypes){
+            if(pKF->keyId == 0)
+                continue;
+            const vector<Pt> vpMapPoints = pKF->GetMapPointMatches(feat);
 
-        int nObs = minNumObservations;
-        const int thObs=nObs;
-        int nRedundantObservations=0;
-        int nMPs=0;
-        for(size_t i=0, iend=vpMapPoints.size(); i<iend; i++)
-        {
-            Pt pMP = vpMapPoints[i];
-            if(pMP)
+            int nObs = minNumObservations;
+            const int thObs=nObs;
+            int nRedundantObservations=0;
+            int nMPs=0;
+            for(size_t i=0, iend=vpMapPoints.size(); i<iend; i++)
             {
-                if(!pMP->isBad())
+                Pt pMP = vpMapPoints[i];
+
+                if(pMP)
                 {
-                    if(!mbMonocular)
+                    if(!pMP->isBad())
                     {
-                        if(pKF->mvDepth[i]>pKF->mThDepth || pKF->mvDepth[i]<0)
-                            continue;
-                    }
+                        FeatureType featType = pMP->featureType;
 
-                    nMPs++;
-                    if(pMP->NumberOfObservations() > thObs)
-                    {
-                        const float keyPtSize = pKF->GetKeyPtSize(KeypointIndex(i));
-                        const map<KeyframeId , Obs> observations = pMP->GetObservations();
-                        int nObs=0;
-                        for(auto& obs: observations)
+                        if(!mbMonocular)
                         {
-                            Keyframe keyframe_i = obs.second->projKeyframe;
-                            if(keyframe_i->keyId == pKF->keyId)
+                            if(pKF->mvDepth.at(featType)[i]>pKF->mThDepth || pKF->mvDepth.at(featType)[i]<0)
                                 continue;
-// #ifndef VANILLA_ORB_SLAM2
-                            if(keyframe_i->isBad())
-                                continue;
-// #endif
-                            const float keyPtSize_i = keyframe_i->GetKeyPtSize(obs.second->projIndex);
+                        }
 
-                            if(keyPtSize_i <= keyPtSize * keyframe_i->sizeTolerance)
+                        nMPs++;
+                        if(pMP->NumberOfObservations() > thObs)
+                        {
+                            const float keyPtSize = pKF->GetKeyPtSize(KeypointIndex(i), featType);
+                            const map<KeyframeId , Obs> observations = pMP->GetObservations();
+                            int nObs=0;
+                            for(auto& obs: observations)
                             {
-                                nObs++;
-                                if(nObs>=thObs)
-                                    break;
+                                Keyframe keyframe_i = obs.second->projKeyframe;
+                                if(keyframe_i->keyId == pKF->keyId)
+                                    continue;
+    // #ifndef VANILLA_ORB_SLAM2
+                                if(keyframe_i->isBad())
+                                    continue;
+    // #endif
+                                const float keyPtSize_i = keyframe_i->GetKeyPtSize(obs.second->projIndex, featType);
+
+                                if(keyPtSize_i <= keyPtSize * keyframe_i->sizeTolerance)
+                                {
+                                    nObs++;
+                                    if(nObs>=thObs)
+                                        break;
+                                }
+                            }
+                            if(nObs>=thObs)
+                            {
+                                nRedundantObservations++;
                             }
                         }
-                        if(nObs>=thObs)
-                        {
-                            nRedundantObservations++;
-                        }
                     }
                 }
             }
-        }
-        if(nRedundantObservations > covisibilityThreshold * nMPs){
-//#ifndef VANILLA_ORB_SLAM2
-            /*bool cull = true;
-            if(keyframes_to_positions[pKF->keyId].empty())
-                cull = false;
-
-            for(auto& position: keyframes_to_positions[pKF->keyId]){ // Positions associated with keyframe pKF
-                if(positions_to_keyframes[position].size() < 2) // Keyframes associated with position
-                {
+            if(nRedundantObservations > covisibilityThreshold * nMPs){
+    //#ifndef VANILLA_ORB_SLAM2
+                /*bool cull = true;
+                if(keyframes_to_positions[pKF->keyId].empty())
                     cull = false;
-                    continue;
-                }
-            }
 
-            if(cull){
                 for(auto& position: keyframes_to_positions[pKF->keyId]){ // Positions associated with keyframe pKF
-                    positions_to_keyframes[position].erase(pKF->keyId); // Keyframes associated with position
+                    if(positions_to_keyframes[position].size() < 2) // Keyframes associated with position
+                    {
+                        cull = false;
+                        continue;
+                    }
                 }
-                keyframes_to_positions[pKF->keyId].clear();
+
+                if(cull){
+                    for(auto& position: keyframes_to_positions[pKF->keyId]){ // Positions associated with keyframe pKF
+                        positions_to_keyframes[position].erase(pKF->keyId); // Keyframes associated with position
+                    }
+                    keyframes_to_positions[pKF->keyId].clear();
+                    pKF->SetBadFlag();
+                }*/
+    //#else
                 pKF->SetBadFlag();
-            }*/
-//#else
-            pKF->SetBadFlag();
-//#endif
-        }
+    //#endif
+            }
+    }
     }
 }
 

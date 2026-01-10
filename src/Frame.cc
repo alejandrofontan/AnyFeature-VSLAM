@@ -42,162 +42,165 @@ Frame::Frame(const Frame &frame)
      mbf(frame.mbf), mb(frame.mb), mThDepth(frame.mThDepth), N(frame.N), mvKeys(frame.mvKeys),
      mvKeysRight(frame.mvKeysRight), mvKeysUn(frame.mvKeysUn),  mvuRight(frame.mvuRight),
      mvDepth(frame.mvDepth), mBowVec(frame.mBowVec), mFeatVec(frame.mFeatVec),
-     mDescriptors(frame.mDescriptors.clone()), mDescriptorsRight(frame.mDescriptorsRight.clone()),
-     pts(frame.pts), mvbOutlier(frame.mvbOutlier), mnId(frame.mnId),
-     refKeyframe(frame.refKeyframe),
+     pts(frame.pts), mvbOutlier(frame.mvbOutlier), mnId(frame.mnId), refKeyframe(frame.refKeyframe),
      sizeTolerance(frame.sizeTolerance),invSizeTolerance(frame.invSizeTolerance),
      keyPtsSigma2(frame.keyPtsSigma2),keyPtsInf(frame.keyPtsInf),keyPtsSize(frame.keyPtsSize),
-     maxKeyPtSize(frame.maxKeyPtSize),maxKeyPtSigma(frame.maxKeyPtSigma)
+     maxKeyPtSize(frame.maxKeyPtSize),maxKeyPtSigma(frame.maxKeyPtSigma), featureTypes(frame.featureTypes)
 {
-    for(int i=0;i<FRAME_GRID_COLS;i++)
-        for(int j=0; j<FRAME_GRID_ROWS; j++)
-            mGrid[i][j]=frame.mGrid[i][j];
+    for (FeatureType ft : featureTypes)
+        for(int i = 0;i<FRAME_GRID_COLS;i++)
+            for(int j=0; j<FRAME_GRID_ROWS; j++)
+                mGrid[ft][i][j] = frame.mGrid.at(ft)[i][j];
+
+    for (auto const& [featType, descriptors] : frame.mDescriptors)
+            descriptors.copyTo(mDescriptors[featType]);
+    for (auto const& [featType, descriptors] : frame.mDescriptorsRight) 
+            descriptors.copyTo(mDescriptorsRight[featType]);
 
     if(frame.Tcw(3,3) == 1.0f)
         SetPose(frame.Tcw);
 }
 
 
-Frame::Frame(const cv::Mat &imLeft, const cv::Mat &imRight, const double &timeStamp,
-             shared_ptr<FeatureExtractor>& extractorLeft, shared_ptr<FeatureExtractor>& extractorRight,
-             shared_ptr<Vocabulary> vocabulary, cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth)
-    :vocabulary(vocabulary),
-    featureExtractorLeft(extractorLeft),featureExtractorRight(extractorRight),
-    mTimeStamp(timeStamp), mK(K.clone()),mDistCoef(distCoef.clone()), mbf(bf), mThDepth(thDepth),
-     refKeyframe(static_cast<Keyframe>(nullptr))
-{
-    // Frame ID
-    mnId=nNextId++;
+// Frame::Frame(const cv::Mat &imLeft, const cv::Mat &imRight, const double &timeStamp,
+//              shared_ptr<FeatureExtractor>& extractorLeft, shared_ptr<FeatureExtractor>& extractorRight,
+//              shared_ptr<Vocabulary> vocabulary, cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth)
+//     :vocabulary(vocabulary),
+//     featureExtractorLeft(extractorLeft),featureExtractorRight(extractorRight),
+//     mTimeStamp(timeStamp), mK(K.clone()),mDistCoef(distCoef.clone()), mbf(bf), mThDepth(thDepth),
+//      refKeyframe(static_cast<Keyframe>(nullptr))
+// {
+//     // Frame ID
+//     mnId=nNextId++;
 
-    // Scale Level Info
-    sizeTolerance = extractorLeft->GetScaleFactor();
-    invSizeTolerance = 1.0f / sizeTolerance;
+//     // Scale Level Info
+//     sizeTolerance = extractorLeft->GetScaleFactor();
+//     invSizeTolerance = 1.0f / sizeTolerance;
 
-    // Feature extraction
-    //thread threadLeft(&Frame::ExtractFeatures,this,0,imLeft);
-    //thread threadRight(&Frame::ExtractFeatures,this,1,imRight);
-    //threadLeft.join();
-    //threadRight.join();
+//     // Feature extraction
+//     //thread threadLeft(&Frame::ExtractFeatures,this,0,imLeft);
+//     //thread threadRight(&Frame::ExtractFeatures,this,1,imRight);
+//     //threadLeft.join();
+//     //threadRight.join();
 
-    N = mvKeys.size();
+//     N = mvKeys.size();
 
-    if(mvKeys.empty())
-        return;
+//     if(mvKeys.empty())
+//         return;
 
-    UndistortKeyPoints();
+//     UndistortKeyPoints();
 
-    ComputeStereoMatches(vocabulary->descriptorType);
+//     ComputeStereoMatches(vocabulary->descriptorType);
 
-    pts = vector<Pt>(N,static_cast<Pt>(nullptr));
-    mvbOutlier = vector<bool>(N,false);
+//     pts = vector<Pt>(N,static_cast<Pt>(nullptr));
+//     mvbOutlier = vector<bool>(N,false);
 
 
-    // This is done only for the first Frame (or after a change in the calibration)
-    if(mbInitialComputations)
-    {
-        ComputeImageBounds(imLeft);
+//     // This is done only for the first Frame (or after a change in the calibration)
+//     if(mbInitialComputations)
+//     {
+//         ComputeImageBounds(imLeft);
 
-        mfGridElementWidthInv=static_cast<float>(FRAME_GRID_COLS)/(mnMaxX-mnMinX);
-        mfGridElementHeightInv=static_cast<float>(FRAME_GRID_ROWS)/(mnMaxY-mnMinY);
+//         mfGridElementWidthInv=static_cast<float>(FRAME_GRID_COLS)/(mnMaxX-mnMinX);
+//         mfGridElementHeightInv=static_cast<float>(FRAME_GRID_ROWS)/(mnMaxY-mnMinY);
 
-        fx = K.at<float>(0,0);
-        fy = K.at<float>(1,1);
-        cx = K.at<float>(0,2);
-        cy = K.at<float>(1,2);
-        invfx = 1.0f/fx;
-        invfy = 1.0f/fy;
+//         fx = K.at<float>(0,0);
+//         fy = K.at<float>(1,1);
+//         cx = K.at<float>(0,2);
+//         cy = K.at<float>(1,2);
+//         invfx = 1.0f/fx;
+//         invfy = 1.0f/fy;
 
-        mbInitialComputations=false;
-    }
+//         mbInitialComputations=false;
+//     }
 
-    mb = mbf/fx;
+//     mb = mbf/fx;
 
-    AssignFeaturesToGrid();
-}
+//     AssignFeaturesToGrid();
+// }
 
-Frame::Frame(const cv::Mat &imGray, const cv::Mat &imDepth, const double &timeStamp,
-             shared_ptr<FeatureExtractor>& extractor,
-             shared_ptr<Vocabulary> vocabulary, cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth)
-    :vocabulary(vocabulary),
-    featureExtractorLeft(extractor),featureExtractorRight(static_cast<shared_ptr<FeatureExtractor>>(nullptr)),
-    mTimeStamp(timeStamp), mK(K.clone()),mDistCoef(distCoef.clone()), mbf(bf), mThDepth(thDepth)
-{
-    // Frame ID
-    mnId=nNextId++;
+// Frame::Frame(const cv::Mat &imGray, const cv::Mat &imDepth, const double &timeStamp,
+//              shared_ptr<FeatureExtractor>& extractor,
+//              shared_ptr<Vocabulary> vocabulary, cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth)
+//     :vocabulary(vocabulary),
+//     featureExtractorLeft(extractor),featureExtractorRight(static_cast<shared_ptr<FeatureExtractor>>(nullptr)),
+//     mTimeStamp(timeStamp), mK(K.clone()),mDistCoef(distCoef.clone()), mbf(bf), mThDepth(thDepth)
+// {
+//     // Frame ID
+//     mnId=nNextId++;
 
-    // Scale Level Info
-    sizeTolerance = featureExtractorLeft->GetScaleFactor();
-    invSizeTolerance = 1.0f / sizeTolerance;
+//     // Scale Level Info
+//     sizeTolerance = featureExtractorLeft->GetScaleFactor();
+//     invSizeTolerance = 1.0f / sizeTolerance;
 
-    // Feature extraction
-    //ExtractFeatures(0,imGray);
+//     // Feature extraction
+//     //ExtractFeatures(0,imGray);
 
-    N = mvKeys.size();
+//     N = mvKeys.size();
 
-    if(mvKeys.empty())
-        return;
+//     if(mvKeys.empty())
+//         return;
 
-    UndistortKeyPoints();
+//     UndistortKeyPoints();
 
-    ComputeStereoFromRGBD(imDepth);
+//     ComputeStereoFromRGBD(imDepth);
 
-    pts = vector<Pt>(N,static_cast<Pt>(nullptr));
-    mvbOutlier = vector<bool>(N,false);
+//     pts = vector<Pt>(N,static_cast<Pt>(nullptr));
+//     mvbOutlier = vector<bool>(N,false);
 
-    // This is done only for the first Frame (or after a change in the calibration)
-    if(mbInitialComputations)
-    {
-        ComputeImageBounds(imGray);
+//     // This is done only for the first Frame (or after a change in the calibration)
+//     if(mbInitialComputations)
+//     {
+//         ComputeImageBounds(imGray);
 
-        mfGridElementWidthInv=static_cast<float>(FRAME_GRID_COLS)/static_cast<float>(mnMaxX-mnMinX);
-        mfGridElementHeightInv=static_cast<float>(FRAME_GRID_ROWS)/static_cast<float>(mnMaxY-mnMinY);
+//         mfGridElementWidthInv=static_cast<float>(FRAME_GRID_COLS)/static_cast<float>(mnMaxX-mnMinX);
+//         mfGridElementHeightInv=static_cast<float>(FRAME_GRID_ROWS)/static_cast<float>(mnMaxY-mnMinY);
 
-        fx = K.at<float>(0,0);
-        fy = K.at<float>(1,1);
-        cx = K.at<float>(0,2);
-        cy = K.at<float>(1,2);
-        invfx = 1.0f/fx;
-        invfy = 1.0f/fy;
+//         fx = K.at<float>(0,0);
+//         fy = K.at<float>(1,1);
+//         cx = K.at<float>(0,2);
+//         cy = K.at<float>(1,2);
+//         invfx = 1.0f/fx;
+//         invfy = 1.0f/fy;
 
-        mbInitialComputations=false;
-    }
+//         mbInitialComputations=false;
+//     }
 
-    mb = mbf/fx;
+//     mb = mbf/fx;
 
-    AssignFeaturesToGrid();
-}
+//     AssignFeaturesToGrid();
+// }
 
 
 Frame::Frame(const Image & img, const double &timeStamp,
-             shared_ptr<FeatureExtractor>& extractor,
-             shared_ptr<Vocabulary> vocabulary, cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth)
+             std::map<FeatureType, shared_ptr<FeatureExtractor>>& extractor,
+             shared_ptr<Vocabulary> vocabulary, cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth, std::vector<FeatureType> featureTypes)
     :vocabulary(vocabulary),
-    featureExtractorLeft(extractor),featureExtractorRight(static_cast<shared_ptr<FeatureExtractor>>(nullptr)),
-    mTimeStamp(timeStamp), mK(K.clone()),mDistCoef(distCoef.clone()), mbf(bf), mThDepth(thDepth)
+    featureExtractorLeft(extractor), featureExtractorRight(),
+    mTimeStamp(timeStamp), mK(K.clone()),mDistCoef(distCoef.clone()), mbf(bf), mThDepth(thDepth),
+    featureTypes(featureTypes)
 {
     // Frame ID
-    mnId=nNextId++;
+    mnId = nNextId++;
 
     // Scale Level Info
-    sizeTolerance = featureExtractorLeft->GetScaleFactor();
+    sizeTolerance = featureExtractorLeft.begin()->second->GetScaleFactor();
     invSizeTolerance = 1.0f / sizeTolerance;
 
     // Feature extraction
     ExtractFeatures(0,img);
-
-    N = mvKeys.size();
-
-    if(mvKeys.empty())
+    if(Ntotal == 0)
         return;
 
     UndistortKeyPoints();
 
     // Set no stereo information
-    mvuRight = vector<float>(N,-1);
-    mvDepth = vector<float>(N,-1);
-
-    pts = vector<Pt>(N,static_cast<Pt>(nullptr));
-    mvbOutlier = vector<bool>(N,false);
+    for(auto& [ft,extractor] : featureExtractorLeft){
+        mvuRight[ft] = vector<float>(N.at(ft),-1);
+        mvDepth[ft] = vector<float>(N.at(ft),-1);
+        pts[ft] = vector<Pt>(N.at(ft), static_cast<Pt>(nullptr));
+        mvbOutlier[ft] = vector<bool>(N.at(ft), false);
+    }
 
     // This is done only for the first Frame (or after a change in the calibration)
     if(mbInitialComputations)
@@ -218,24 +221,23 @@ Frame::Frame(const Image & img, const double &timeStamp,
     }
 
     mb = mbf/fx;
-
-    AssignFeaturesToGrid();
+    for(auto& [ft, extractor] : featureExtractorLeft)
+        AssignFeaturesToGrid(ft);
 }
 
-void Frame::AssignFeaturesToGrid()
+void Frame::AssignFeaturesToGrid(const FeatureType& featType)
 {
-    int nReserve = 0.5f*N/(FRAME_GRID_COLS*FRAME_GRID_ROWS);
+    int nReserve = 0.5f * N.at(featType)/(FRAME_GRID_COLS*FRAME_GRID_ROWS);
     for(unsigned int i=0; i<FRAME_GRID_COLS;i++)
         for (unsigned int j=0; j<FRAME_GRID_ROWS;j++)
-            mGrid[i][j].reserve(nReserve);
-
-    for(int i=0;i<N;i++)
+            mGrid[featType][i][j].reserve(nReserve);
+    
+    for(int i = 0; i < N.at(featType); i++)
     {
-        const cv::KeyPoint &kp = mvKeysUn[i];
-
+        const cv::KeyPoint &kp = mvKeysUn.at(featType)[i];
         int nGridPosX, nGridPosY;
         if(PosInGrid(kp,nGridPosX,nGridPosY))
-            mGrid[nGridPosX][nGridPosY].push_back(i);
+            mGrid[featType][nGridPosX][nGridPosY].push_back(i);
     }
 }
 
@@ -243,13 +245,21 @@ void Frame::ExtractFeatures(int flag, const Image & img)
 {
     if(flag==0){
 // #ifdef VANILLA_ORB_SLAM2
-        (*featureExtractorLeft)(img,mvKeys,mDescriptors,keyPtsSigma2,keyPtsInf,keyPtsSize,true);
+        Ntotal = 0;
+        for(auto& [ft, extractor] : featureExtractorLeft){
+            //(*featureExtractorLeft[ft])(img, mvKeys[ft], mDescriptors[ft], keyPtsSigma2[ft], keyPtsInf[ft], keyPtsSize[ft], true);
+            (*extractor)(img,mvKeys[ft],mDescriptors[ft],keyPtsSigma2[ft],keyPtsInf[ft],keyPtsSize[ft]);
+            N[ft] = mvKeys[ft].size();
+            Ntotal += N[ft];
+            
+            std::cout << "Extracted " << N[ft] << " keypoints of type " << ft << std::endl;
+        }
 // #else
-
 //         (*featureExtractorLeft)(img,mvKeys,mDescriptors,keyPtsSigma2,keyPtsInf,keyPtsSize);
 // #endif
-        maxKeyPtSize = featureExtractorLeft->GetMaxKeyPtSize();
-        maxKeyPtSigma = featureExtractorLeft->GetMaxKeyPtSigma();
+        maxKeyPtSize = featureExtractorLeft.begin()->second->GetMaxKeyPtSize();
+        maxKeyPtSigma = featureExtractorLeft.begin()->second->GetMaxKeyPtSigma();
+
     }
     else{
         std::cout << "This part of the code (Frame::ExtractORB) is not prepared to run with independent sigmas and sizes."<< std::endl;
@@ -331,10 +341,10 @@ bool Frame::isInFrustum(Pt pMP, float viewingCosLimit)
 }
 
 vector<size_t> Frame::GetFeaturesInArea(const float &x, const float  &y, const float  &r,
-                                        const float& minSize, const float& maxSize) const
+                                        const float& minSize, const float& maxSize, const FeatureType& featType) const
 {
     vector<size_t> vIndices;
-    vIndices.reserve(N);
+    vIndices.reserve(N.at(featType));
 
     const int nMinCellX = max(0,(int)floor((x-mnMinX-r)*mfGridElementWidthInv));
     if(nMinCellX>=FRAME_GRID_COLS)
@@ -356,17 +366,17 @@ vector<size_t> Frame::GetFeaturesInArea(const float &x, const float  &y, const f
     {
         for(int iy = nMinCellY; iy<=nMaxCellY; iy++)
         {
-            const vector<size_t> vCell = mGrid[ix][iy];
+            const vector<size_t> vCell = mGrid.at(featType)[ix][iy];
             if(vCell.empty())
                 continue;
 
             for(size_t j=0, jend=vCell.size(); j<jend; j++)
             {
-                const cv::KeyPoint &kpUn = mvKeysUn[vCell[j]];
+                const cv::KeyPoint &kpUn = mvKeysUn.at(featType)[vCell[j]];
 
-                if(keyPtsSize[vCell[j]] < minSize)
+                if(keyPtsSize.at(featType)[vCell[j]] < minSize)
                     continue;
-                if(keyPtsSize[vCell[j]] > maxSize)
+                if(keyPtsSize.at(featType)[vCell[j]] > maxSize)
                     continue;
 
                 const float distx = kpUn.pt.x - x;
@@ -394,41 +404,44 @@ bool Frame::PosInGrid(const cv::KeyPoint &kp, int &posX, int &posY)
 }
 
 
-void Frame::ComputeBoW()
+void Frame::ComputeBoW(const FeatureType& featType)
 {
     if(mBowVec.empty())
-        vocabulary->transform(mDescriptors,mBowVec,mFeatVec);
+        vocabulary->transform(mDescriptors[featType], mBowVec,mFeatVec);
 }
 
 void Frame::UndistortKeyPoints()
-{
-    if(mDistCoef.at<float>(0)==0.0)
+{   
+    for(auto& [ft,extractor] : featureExtractorLeft)
     {
-        mvKeysUn=mvKeys;
-        return;
-    }
+        if(mDistCoef.at<float>(0)==0.0)
+        {
+            mvKeysUn[ft] = mvKeys[ft];
+            continue;
+        }
 
-    // Fill matrix with points
-    cv::Mat mat(N,2,CV_32F);
-    for(int i=0; i<N; i++)
-    {
-        mat.at<float>(i,0)=mvKeys[i].pt.x;
-        mat.at<float>(i,1)=mvKeys[i].pt.y;
-    }
+        // Fill matrix with points
+        cv::Mat mat(N.at(ft),2,CV_32F);
+        for(int i=0; i<N.at(ft); i++)
+        {
+            mat.at<float>(i,0) = mvKeys[ft][i].pt.x;
+            mat.at<float>(i,1) = mvKeys[ft][i].pt.y;
+        }
 
-    // Undistort points
-    mat=mat.reshape(2);
-    cv::undistortPoints(mat,mat,mK,mDistCoef,cv::Mat(),mK);
-    mat=mat.reshape(1);
+        // Undistort points
+        mat=mat.reshape(2);
+        cv::undistortPoints(mat,mat,mK,mDistCoef,cv::Mat(),mK);
+        mat=mat.reshape(1);
 
-    // Fill undistorted keypoint vector
-    mvKeysUn.resize(N);
-    for(int i=0; i<N; i++)
-    {
-        cv::KeyPoint kp = mvKeys[i];
-        kp.pt.x=mat.at<float>(i,0);
-        kp.pt.y=mat.at<float>(i,1);
-        mvKeysUn[i]=kp;
+        // Fill undistorted keypoint vector
+        mvKeysUn[ft].resize(N.at(ft));
+        for(int i = 0; i < N.at(ft); i++)
+        {
+            cv::KeyPoint kp = mvKeys[ft][i];
+            kp.pt.x=mat.at<float>(i,0);
+            kp.pt.y=mat.at<float>(i,1);
+            mvKeysUn[ft][i]=kp;
+        }
     }
 }
 
@@ -465,262 +478,268 @@ void Frame::ComputeImageBounds(const cv::Mat &imLeft)
 void Frame::ComputeStereoMatches(const DescriptorType& descriptorType)
 {
     std::cout << "This function (Frame::ComputeStereoMatches) has not been modified yet to work with AnyFeature-VSLAM"<< endl;
-    //std::terminate();
+    std::terminate();
 
-    mvuRight = vector<float>(N,-1.0f);
-    mvDepth = vector<float>(N,-1.0f);
+    // mvuRight = vector<float>(N,-1.0f);
+    // mvDepth = vector<float>(N,-1.0f);
 
-    const Descriptor_Distance_Type thOrbDist = (FeatureMatcher::TH_HIGH + FeatureMatcher::TH_LOW) / Descriptor_Distance_Type(2);
+    // const Descriptor_Distance_Type thOrbDist = (FeatureMatcher::TH_HIGH + FeatureMatcher::TH_LOW) / Descriptor_Distance_Type(2);
 
-    const int nRows = featureExtractorLeft->mvImagePyramid[0].rows;
+    // const int nRows = featureExtractorLeft->mvImagePyramid[0].rows;
 
-    //Assign keypoints to row table
-    vector<vector<size_t> > vRowIndices(nRows,vector<size_t>());
+    // //Assign keypoints to row table
+    // vector<vector<size_t> > vRowIndices(nRows,vector<size_t>());
 
-    for(int i=0; i<nRows; i++)
-        vRowIndices[i].reserve(200);
+    // for(int i=0; i<nRows; i++)
+    //     vRowIndices[i].reserve(200);
 
-    const int Nr = mvKeysRight.size();
+    // const int Nr = mvKeysRight.size();
 
-    for(int iR=0; iR<Nr; iR++)
-    {
-        const cv::KeyPoint &kp = mvKeysRight[iR];
-        const float &kpY = kp.pt.y;
+    // for(int iR=0; iR<Nr; iR++)
+    // {
+    //     const cv::KeyPoint &kp = mvKeysRight[iR];
+    //     const float &kpY = kp.pt.y;
 
-        //const float r = 2.0f*mvScaleFactors[mvKeysRight[iR].octave];
-        const float r = 2.0f * GetKeyPtSize(iR); // GetKeyPtSizeRight(iR) !!!!!!!!!!!!!!!!!!!!!!!!!!
+    //     //const float r = 2.0f*mvScaleFactors[mvKeysRight[iR].octave];
+    //     const float r = 2.0f * GetKeyPtSize(iR); // GetKeyPtSizeRight(iR) !!!!!!!!!!!!!!!!!!!!!!!!!!
 
-        const int maxr = ceil(kpY+r);
-        const int minr = floor(kpY-r);
+    //     const int maxr = ceil(kpY+r);
+    //     const int minr = floor(kpY-r);
 
-        for(int yi=minr;yi<=maxr;yi++)
-            vRowIndices[yi].push_back(iR);
-    }
+    //     for(int yi=minr;yi<=maxr;yi++)
+    //         vRowIndices[yi].push_back(iR);
+    // }
 
-    // Set limits for search
-    const float minZ = mb;
-    const float minD = 0;
-    const float maxD = mbf/minZ;
+    // // Set limits for search
+    // const float minZ = mb;
+    // const float minD = 0;
+    // const float maxD = mbf/minZ;
 
-    // For each left keypoint search a match in the right image
-    vector<pair<int, int> > vDistIdx;
-    vDistIdx.reserve(N);
+    // // For each left keypoint search a match in the right image
+    // vector<pair<int, int> > vDistIdx;
+    // vDistIdx.reserve(N);
 
-    for(int iL=0; iL<N; iL++)
-    {
-        const cv::KeyPoint &kpL = mvKeys[iL];
-        const int &levelL = kpL.octave;
-        const float &vL = kpL.pt.y;
-        const float &uL = kpL.pt.x;
+    // for(int iL=0; iL<N; iL++)
+    // {
+    //     const cv::KeyPoint &kpL = mvKeys[iL];
+    //     const int &levelL = kpL.octave;
+    //     const float &vL = kpL.pt.y;
+    //     const float &uL = kpL.pt.x;
 
-        const vector<size_t> &vCandidates = vRowIndices[vL];
+    //     const vector<size_t> &vCandidates = vRowIndices[vL];
 
-        if(vCandidates.empty())
-            continue;
+    //     if(vCandidates.empty())
+    //         continue;
 
-        const float minU = uL-maxD;
-        const float maxU = uL-minD;
+    //     const float minU = uL-maxD;
+    //     const float maxU = uL-minD;
 
-        if(maxU<0)
-            continue;
+    //     if(maxU<0)
+    //         continue;
 
-        Descriptor_Distance_Type bestDist1{FeatureMatcher::TH_HIGH};
-        size_t bestIdxR = 0;
+    //     Descriptor_Distance_Type bestDist1{FeatureMatcher::TH_HIGH};
+    //     size_t bestIdxR = 0;
 
-        const cv::Mat &descriptorLeft = mDescriptors.row(iL);
+    //     const cv::Mat &descriptorLeft = mDescriptors.row(iL);
 
-        // Compare descriptor to right keypoints
-        for(size_t iC=0; iC<vCandidates.size(); iC++)
-        {
-            const size_t iR = vCandidates[iC];
-            const cv::KeyPoint &kpR = mvKeysRight[iR];
+    //     // Compare descriptor to right keypoints
+    //     for(size_t iC=0; iC<vCandidates.size(); iC++)
+    //     {
+    //         const size_t iR = vCandidates[iC];
+    //         const cv::KeyPoint &kpR = mvKeysRight[iR];
 
-            if(kpR.octave<levelL-1 || kpR.octave>levelL+1)
-                continue;
+    //         if(kpR.octave<levelL-1 || kpR.octave>levelL+1)
+    //             continue;
 
-            const float &uR = kpR.pt.x;
+    //         const float &uR = kpR.pt.x;
 
-            if(uR>=minU && uR<=maxU)
-            {
-                const cv::Mat &descriptorRight = mDescriptorsRight.row(iR);
-                const Descriptor_Distance_Type descDist = FeatureMatcher::DescriptorDistance(descriptorLeft, descriptorRight, descriptorType);
+    //         if(uR>=minU && uR<=maxU)
+    //         {
+    //             const cv::Mat &descriptorRight = mDescriptorsRight.row(iR);
+    //             const Descriptor_Distance_Type descDist = FeatureMatcher::DescriptorDistance(descriptorLeft, descriptorRight, descriptorType);
 
-                if(descDist < bestDist1)
-                {
-                    bestDist1 = descDist;
-                    bestIdxR = iR;
-                }
-            }
-        }
+    //             if(descDist < bestDist1)
+    //             {
+    //                 bestDist1 = descDist;
+    //                 bestIdxR = iR;
+    //             }
+    //         }
+    //     }
 
-        // Subpixel match by correlation
-        if(bestDist1 < thOrbDist)
-        {
-            // coordinates in image pyramid at keypoint scale
-            const float uR0 = mvKeysRight[bestIdxR].pt.x;
-            const float scaleFactor = 1.0f / GetKeyPtSize(iL);
-            const float scaleduL = round(kpL.pt.x*scaleFactor);
-            const float scaledvL = round(kpL.pt.y*scaleFactor);
-            const float scaleduR0 = round(uR0*scaleFactor);
+    //     // Subpixel match by correlation
+    //     if(bestDist1 < thOrbDist)
+    //     {
+    //         // coordinates in image pyramid at keypoint scale
+    //         const float uR0 = mvKeysRight[bestIdxR].pt.x;
+    //         const float scaleFactor = 1.0f / GetKeyPtSize(iL);
+    //         const float scaleduL = round(kpL.pt.x*scaleFactor);
+    //         const float scaledvL = round(kpL.pt.y*scaleFactor);
+    //         const float scaleduR0 = round(uR0*scaleFactor);
 
-            // sliding window search
-            const int w = 5;
-            cv::Mat IL = featureExtractorLeft->mvImagePyramid[kpL.octave].rowRange(scaledvL-w,scaledvL+w+1).colRange(scaleduL-w,scaleduL+w+1);
-            IL.convertTo(IL,CV_32F);
-            IL = IL - IL.at<float>(w,w) *cv::Mat::ones(IL.rows,IL.cols,CV_32F);
+    //         // sliding window search
+    //         const int w = 5;
+    //         cv::Mat IL = featureExtractorLeft->mvImagePyramid[kpL.octave].rowRange(scaledvL-w,scaledvL+w+1).colRange(scaleduL-w,scaleduL+w+1);
+    //         IL.convertTo(IL,CV_32F);
+    //         IL = IL - IL.at<float>(w,w) *cv::Mat::ones(IL.rows,IL.cols,CV_32F);
 
-            int bestDist = INT_MAX;
-            int bestincR = 0;
-            const int L = 5;
-            vector<float> vDists;
-            vDists.resize(2*L+1);
+    //         int bestDist = INT_MAX;
+    //         int bestincR = 0;
+    //         const int L = 5;
+    //         vector<float> vDists;
+    //         vDists.resize(2*L+1);
 
-            const float iniu = scaleduR0+L-w;
-            const float endu = scaleduR0+L+w+1;
-            if(iniu<0 || endu >= featureExtractorRight->mvImagePyramid[kpL.octave].cols)
-                continue;
+    //         const float iniu = scaleduR0+L-w;
+    //         const float endu = scaleduR0+L+w+1;
+    //         if(iniu<0 || endu >= featureExtractorRight->mvImagePyramid[kpL.octave].cols)
+    //             continue;
 
-            for(int incR=-L; incR<=+L; incR++)
-            {
-                cv::Mat IR = featureExtractorRight->mvImagePyramid[kpL.octave].rowRange(scaledvL-w,scaledvL+w+1).colRange(scaleduR0+incR-w,scaleduR0+incR+w+1);
-                IR.convertTo(IR,CV_32F);
-                IR = IR - IR.at<float>(w,w) *cv::Mat::ones(IR.rows,IR.cols,CV_32F);
+    //         for(int incR=-L; incR<=+L; incR++)
+    //         {
+    //             cv::Mat IR = featureExtractorRight->mvImagePyramid[kpL.octave].rowRange(scaledvL-w,scaledvL+w+1).colRange(scaleduR0+incR-w,scaleduR0+incR+w+1);
+    //             IR.convertTo(IR,CV_32F);
+    //             IR = IR - IR.at<float>(w,w) *cv::Mat::ones(IR.rows,IR.cols,CV_32F);
 
-                float dist = cv::norm(IL,IR,cv::NORM_L1);
-                if(dist<bestDist)
-                {
-                    bestDist =  dist;
-                    bestincR = incR;
-                }
+    //             float dist = cv::norm(IL,IR,cv::NORM_L1);
+    //             if(dist<bestDist)
+    //             {
+    //                 bestDist =  dist;
+    //                 bestincR = incR;
+    //             }
 
-                vDists[L+incR] = dist;
-            }
+    //             vDists[L+incR] = dist;
+    //         }
 
-            if(bestincR==-L || bestincR==L)
-                continue;
+    //         if(bestincR==-L || bestincR==L)
+    //             continue;
 
-            // Sub-pixel match (Parabola fitting)
-            const float dist1 = vDists[L+bestincR-1];
-            const float dist2 = vDists[L+bestincR];
-            const float dist3 = vDists[L+bestincR+1];
+    //         // Sub-pixel match (Parabola fitting)
+    //         const float dist1 = vDists[L+bestincR-1];
+    //         const float dist2 = vDists[L+bestincR];
+    //         const float dist3 = vDists[L+bestincR+1];
 
-            const float deltaR = (dist1-dist3)/(2.0f*(dist1+dist3-2.0f*dist2));
+    //         const float deltaR = (dist1-dist3)/(2.0f*(dist1+dist3-2.0f*dist2));
 
-            if(deltaR<-1 || deltaR>1)
-                continue;
+    //         if(deltaR<-1 || deltaR>1)
+    //             continue;
 
-            // Re-scaled coordinate
-            float bestuR = GetKeyPtSize(iL) * ((float)scaleduR0+(float)bestincR+deltaR);
+    //         // Re-scaled coordinate
+    //         float bestuR = GetKeyPtSize(iL) * ((float)scaleduR0+(float)bestincR+deltaR);
 
-            float disparity = (uL-bestuR);
+    //         float disparity = (uL-bestuR);
 
-            if(disparity>=minD && disparity<maxD)
-            {
-                if(disparity<=0)
-                {
-                    disparity=0.01;
-                    bestuR = uL-0.01;
-                }
-                mvDepth[iL]=mbf/disparity;
-                mvuRight[iL] = bestuR;
-                vDistIdx.push_back(pair<int,int>(bestDist,iL));
-            }
-        }
-    }
+    //         if(disparity>=minD && disparity<maxD)
+    //         {
+    //             if(disparity<=0)
+    //             {
+    //                 disparity=0.01;
+    //                 bestuR = uL-0.01;
+    //             }
+    //             mvDepth[iL]=mbf/disparity;
+    //             mvuRight[iL] = bestuR;
+    //             vDistIdx.push_back(pair<int,int>(bestDist,iL));
+    //         }
+    //     }
+    // }
 
-    sort(vDistIdx.begin(),vDistIdx.end());
-    const float median = vDistIdx[vDistIdx.size()/2].first;
-    const float thDist = 1.5f*1.4f*median;
+    // sort(vDistIdx.begin(),vDistIdx.end());
+    // const float median = vDistIdx[vDistIdx.size()/2].first;
+    // const float thDist = 1.5f*1.4f*median;
 
-    for(int i=vDistIdx.size()-1;i>=0;i--)
-    {
-        if(vDistIdx[i].first<thDist)
-            break;
-        else
-        {
-            mvuRight[vDistIdx[i].second]=-1;
-            mvDepth[vDistIdx[i].second]=-1;
-        }
-    }
+    // for(int i=vDistIdx.size()-1;i>=0;i--)
+    // {
+    //     if(vDistIdx[i].first<thDist)
+    //         break;
+    //     else
+    //     {
+    //         mvuRight[vDistIdx[i].second]=-1;
+    //         mvDepth[vDistIdx[i].second]=-1;
+    //     }
+    // }
 }
 
 
-void Frame::ComputeStereoFromRGBD(const cv::Mat &imDepth)
-{
-    mvuRight = vector<float>(N,-1);
-    mvDepth = vector<float>(N,-1);
-
-    for(int i=0; i<N; i++)
+    void Frame::ComputeStereoFromRGBD(const cv::Mat &imDepth)
     {
-        const cv::KeyPoint &kp = mvKeys[i];
-        const cv::KeyPoint &kpU = mvKeysUn[i];
+        std::cout << "This function (Frame::ComputeStereoFromRGBD) has not been modified yet to work with AnyFeature-VSLAM"<< endl;
+        std::terminate();
 
-        const float &v = kp.pt.y;
-        const float &u = kp.pt.x;
+        // mvuRight = vector<float>(N,-1);
+        // mvDepth = vector<float>(N,-1);
 
-        const float d = imDepth.at<float>(v,u);
+        // for(int i=0; i<N; i++)
+        // {
+        //     const cv::KeyPoint &kp = mvKeys[i];
+        //     const cv::KeyPoint &kpU = mvKeysUn[i];
 
-        if(d>0)
-        {
-            mvDepth[i] = d;
-            mvuRight[i] = kpU.pt.x-mbf/d;
-        }
+        //     const float &v = kp.pt.y;
+        //     const float &u = kp.pt.x;
+
+        //     const float d = imDepth.at<float>(v,u);
+
+        //     if(d>0)
+        //     {
+        //         mvDepth[i] = d;
+        //         mvuRight[i] = kpU.pt.x-mbf/d;
+        //     }
+        // }
     }
-}
 
-vec3f Frame::UnprojectStereo(const int &i)
-{
-    const float z = mvDepth[i];
-    if(z > 0.0f)
+    vec3f Frame::UnprojectStereo(const int &i)
     {
-        const float u = mvKeysUn[i].pt.x;
-        const float v = mvKeysUn[i].pt.y;
-        const float x = (u-cx)*z*invfx;
-        const float y = (v-cy)*z*invfy;
-        vec3f x3Dc{x, y, z};
-        return Rwc * x3Dc + twc;
-    }
-    else
-        return vec3f{0.0,0.0,-1.0};
-}
+        std::cout << "This function (Frame::UnprojectStereo) has not been modified yet to work with AnyFeature-VSLAM"<< endl;
+        std::terminate();
 
-    float Frame::GetKeyPtSize(const KeypointIndex &keyPtIdx) const {
-        return keyPtsSize[keyPtIdx];
+        // const float z = mvDepth[i];
+        // if(z > 0.0f)
+        // {
+        //     const float u = mvKeysUn[i].pt.x;
+        //     const float v = mvKeysUn[i].pt.y;
+        //     const float x = (u-cx)*z*invfx;
+        //     const float y = (v-cy)*z*invfy;
+        //     vec3f x3Dc{x, y, z};
+        //     return Rwc * x3Dc + twc;
+        // }
+        // else
+        //     return vec3f{0.0,0.0,-1.0};
     }
 
-    float Frame::GetKeyPt1DSigma2(const KeypointIndex &keyPtIdx) const
+    float Frame::GetKeyPtSize(const KeypointIndex &keyPtIdx, const FeatureType& featType) const {
+        return keyPtsSize.at(featType)[keyPtIdx];
+    }
+
+    float Frame::GetKeyPt1DSigma2(const KeypointIndex &keyPtIdx, const FeatureType& featType) const
     {
-        return 0.5f * (keyPtsSigma2[keyPtIdx](0,0) + keyPtsSigma2[keyPtIdx](1,1));
+        return 0.5f * (keyPtsSigma2.at(featType)[keyPtIdx](0,0) + keyPtsSigma2.at(featType)[keyPtIdx](1,1));
     }
 
-    mat2f Frame::GetKeyPt2DSigma2(const KeypointIndex &keyPtIdx) const
+    mat2f Frame::GetKeyPt2DSigma2(const KeypointIndex &keyPtIdx, const FeatureType& featType) const
     {
-        return keyPtsSigma2[keyPtIdx];
+        return keyPtsSigma2.at(featType)[keyPtIdx];
     }
 
-    mat3f Frame::GetKeyPt3DSigma2(const KeypointIndex &keyPtIdx) const
+    mat3f Frame::GetKeyPt3DSigma2(const KeypointIndex &keyPtIdx, const FeatureType& featType) const
     {
         mat3f sigma2Matrix{mat3f::Zero()};
-        sigma2Matrix.block<2,2>(0,0) = keyPtsSigma2[keyPtIdx];
-        sigma2Matrix(2,2) = GetKeyPt1DSigma2(keyPtIdx);
+        sigma2Matrix.block<2,2>(0,0) = keyPtsSigma2.at(featType)[keyPtIdx];
+        sigma2Matrix(2,2) = GetKeyPt1DSigma2(keyPtIdx, featType);
         return sigma2Matrix;
     }
 
-    float Frame::GetKeyPt1DInf(const KeypointIndex &keyPtIdx) const
+    float Frame::GetKeyPt1DInf(const KeypointIndex &keyPtIdx, const FeatureType& featType) const
     {
-        return 0.5f * (keyPtsInf[keyPtIdx](0,0) + keyPtsInf[keyPtIdx](1,1));
+        return 0.5f * (keyPtsInf.at(featType)[keyPtIdx](0,0) + keyPtsInf.at(featType)[keyPtIdx](1,1));
     }
 
-    mat2f Frame::GetKeyPt2DInf(const KeypointIndex &keyPtIdx) const
+    mat2f Frame::GetKeyPt2DInf(const KeypointIndex &keyPtIdx, const FeatureType& featType) const
     {
-        return keyPtsInf[keyPtIdx];
+        return keyPtsInf.at(featType)[keyPtIdx];
     }
 
-    mat3f Frame::GetKeyPt3DInf(const KeypointIndex &keyPtIdx) const
+    mat3f Frame::GetKeyPt3DInf(const KeypointIndex &keyPtIdx, const FeatureType& featType) const
     {
         mat3f infMatrix{mat3f::Zero()};
-        infMatrix.block<2,2>(0,0) = keyPtsInf[keyPtIdx];
-        infMatrix(2,2) = GetKeyPt1DInf(keyPtIdx);
+        infMatrix.block<2,2>(0,0) = keyPtsInf.at(featType)[keyPtIdx];
+        infMatrix(2,2) = GetKeyPt1DInf(keyPtIdx, featType);
         return infMatrix;
     }
 } //namespace ORB_SLAM

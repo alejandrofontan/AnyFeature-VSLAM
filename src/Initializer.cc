@@ -27,15 +27,18 @@
 namespace ANYFEATURE_VSLAM
 {
 
-Initializer::Initializer(const Frame &ReferenceFrame, float sigma_, int iterations)
+Initializer::Initializer(const Frame &ReferenceFrame, float sigma_, int iterations, const FeatureType& featureType_)
 {
+    featureType = featureType_;
+    
     K = Converter::toMatrix3f(ReferenceFrame.mK.clone());
 
-    keypoints1 = ReferenceFrame.mvKeysUn;
+    keypoints1 = ReferenceFrame.mvKeysUn.at(featureType);
 
     sigma = sigma_;
     sigma2 = sigma_ * sigma_;
     maxIterations = iterations;
+    
 }
 
 bool Initializer::Initialize(const Frame &CurrentFrame, const vector<int> &matches12_,
@@ -44,7 +47,7 @@ bool Initializer::Initialize(const Frame &CurrentFrame, const vector<int> &match
 {
     // Fill structures with current keypoints and matches with reference frame
     // Reference Frame: 1, Current Frame: 2
-    keypoints2 = CurrentFrame.mvKeysUn;
+    keypoints2 = CurrentFrame.mvKeysUn.at(featureType);
 
     matches12.clear();
     matches12.reserve(keypoints2.size());

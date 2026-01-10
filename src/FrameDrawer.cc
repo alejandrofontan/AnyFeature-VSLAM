@@ -40,10 +40,10 @@ FrameDrawer::FrameDrawer(shared_ptr<Map> pMap, const vector<FeatureType>& featur
 cv::Mat FrameDrawer::DrawFrame()
 {
     cv::Mat im;
-    vector<cv::KeyPoint> vIniKeys; // Initialization: KeyPoints in reference frame
-    vector<int> vMatches; // Initialization: correspondeces with reference keypoints
-    vector<cv::KeyPoint> vCurrentKeys; // KeyPoints in current frame
-    vector<bool> vbVO, vbMap; // Tracked MapPoints in current frame
+    std::map<FeatureType, vector<cv::KeyPoint>> vIniKeys; // Initialization: KeyPoints in reference frame
+    std::map<FeatureType, vector<int>> vMatches; // Initialization: correspondeces with reference keypoints
+    std::map<FeatureType, vector<cv::KeyPoint>> vCurrentKeys; // KeyPoints in current frame
+    std::map<FeatureType, vector<bool>> vbVO, vbMap; // Tracked MapPoints in current frame
     int state; // Tracking state
 
     //Copy variables within scoped mutex
@@ -59,7 +59,7 @@ cv::Mat FrameDrawer::DrawFrame()
         {
             vCurrentKeys = mvCurrentKeys;
             vIniKeys = mvIniKeys;
-            vMatches = mvIniMatches;
+            vMatches[mvIniKeys.begin()->first] = mvIniMatches;
         }
         else if(mState==Tracking::OK)
         {
@@ -79,45 +79,50 @@ cv::Mat FrameDrawer::DrawFrame()
     //Draw
     if(state==Tracking::NOT_INITIALIZED) //INITIALIZING
     {
-        cv::Scalar color = getFeatureColor(featureTypes[0], 0);
-        for(unsigned int i=0; i<vMatches.size(); i++)
-        {
-            if(vMatches[i]>=0)
+        
+        for (auto const& [featType, N_] : N) {   
+            cv::Scalar color = getFeatureColor(featType, 0);
+            for(unsigned int i=0; i<vMatches[featType].size(); i++)
             {
-                cv::line(im,vIniKeys[i].pt,vCurrentKeys[vMatches[i]].pt,
-                        cv::Scalar(color));
+                if(vMatches[featType][i]>=0)
+                {
+                    cv::line(im,vIniKeys[featType][i].pt,vCurrentKeys[featType][vMatches[featType][i]].pt,
+                            cv::Scalar(color));
+                }
             }
         }        
     }
     else if(state==Tracking::OK) //TRACKING
     {
-        mnTracked=0;
-        mnTrackedVO=0;
-        const float r = 5;
-        const int n = vCurrentKeys.size();
-        cv::Scalar color = getFeatureColor(featureTypes[0], 0);
-        for(int i=0;i<n;i++)
-        {
-            if(vbVO[i] || vbMap[i])
+        for (auto const& [featType, N_] : N) {   
+            mnTracked=0;
+            mnTrackedVO=0;
+            const float r = 5;
+            const int n = vCurrentKeys[featType].size();
+            cv::Scalar color = getFeatureColor(featType, 0);
+            for(int i=0;i<n;i++)
             {
-                cv::Point2f pt1,pt2;
-                pt1.x=vCurrentKeys[i].pt.x-r;
-                pt1.y=vCurrentKeys[i].pt.y-r;
-                pt2.x=vCurrentKeys[i].pt.x+r;
-                pt2.y=vCurrentKeys[i].pt.y+r;
+                if(vbVO.at(featType)[i] || vbMap.at(featType)[i])
+                {
+                    cv::Point2f pt1,pt2;
+                    pt1.x=vCurrentKeys[featType][i].pt.x-r;
+                    pt1.y=vCurrentKeys[featType][i].pt.y-r;
+                    pt2.x=vCurrentKeys[featType][i].pt.x+r;
+                    pt2.y=vCurrentKeys[featType][i].pt.y+r;
 
-                // This is a match to a MapPoint in the map
-                if(vbMap[i])
-                {
-                    cv::rectangle(im,pt1,pt2,color);
-                    cv::circle(im,vCurrentKeys[i].pt,2,color,-1);
-                    mnTracked++;
-                }
-                else // This is match to a "visual odometry" MapPoint created in the last frame
-                {
-                    cv::rectangle(im,pt1,pt2,cv::Scalar(255,0,0));
-                    cv::circle(im,vCurrentKeys[i].pt,2,cv::Scalar(255,0,0),-1);
-                    mnTrackedVO++;
+                    // This is a match to a MapPoint in the map
+                    if(vbMap[featType][i])
+                    {
+                        cv::rectangle(im,pt1,pt2,color);
+                        cv::circle(im,vCurrentKeys[featType][i].pt,2,color,-1);
+                        mnTracked++;
+                    }
+                    else // This is match to a "visual odometry" MapPoint created in the last frame
+                    {
+                        cv::rectangle(im,pt1,pt2,cv::Scalar(255,0,0));
+                        cv::circle(im,vCurrentKeys[featType][i].pt,2,cv::Scalar(255,0,0),-1);
+                        mnTrackedVO++;
+                    }
                 }
             }
         }
@@ -172,31 +177,36 @@ void FrameDrawer::Update(Tracking *pTracker)
 {
     unique_lock<mutex> lock(mMutex);
     pTracker->mImGray.copyTo(mIm);
-    mvCurrentKeys=pTracker->currentFrame.mvKeys;
-    N = mvCurrentKeys.size();
-    mvbVO = vector<bool>(N,false);
-    mvbMap = vector<bool>(N,false);
+    mvCurrentKeys = pTracker->currentFrame.mvKeys;
+    for (auto const& [featType, mvKeys] : mvCurrentKeys) {
+        N[featType] = mvKeys.size();
+        mvbVO[featType] = vector<bool>(N[featType],false);
+        mvbMap[featType] = vector<bool>(N[featType],false);
+    }
+
     mbOnlyTracking = pTracker->onlyTracking;
 
 
     if(pTracker->mLastProcessedState==Tracking::NOT_INITIALIZED)
     {
-        mvIniKeys=pTracker->mInitialFrame.mvKeys;
-        mvIniMatches=pTracker->mvIniMatches;
+        mvIniKeys = pTracker->mInitialFrame.mvKeys;
+        mvIniMatches = pTracker->mvIniMatches;
     }
     else if(pTracker->mLastProcessedState==Tracking::OK)
     {
-        for(int i=0;i<N;i++)
-        {
-            Pt pMP = pTracker->currentFrame.pts[i];
-            if(pMP)
+        for (auto const& [featType, N_] : N) {   
+            for(int i = 0; i < N_; i++)
             {
-                if(!pTracker->currentFrame.mvbOutlier[i])
+                Pt pMP = pTracker->currentFrame.pts.at(featType)[i];
+                if(pMP)
                 {
-                    if(pMP->NumberOfObservations() > 0)
-                        mvbMap[i]=true;
-                    else
-                        mvbVO[i]=true;
+                    if(!pTracker->currentFrame.mvbOutlier.at(featType)[i])
+                    {
+                        if(pMP->NumberOfObservations() > 0)
+                            mvbMap[featType][i] = true;
+                        else
+                            mvbVO[featType][i] = true;
+                    }
                 }
             }
         }

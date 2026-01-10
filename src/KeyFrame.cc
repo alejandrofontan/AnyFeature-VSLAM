@@ -40,35 +40,39 @@ KeyFrame::KeyFrame(Frame &F, shared_ptr<Map> pMap, shared_ptr<KeyFrameDatabase>p
     mnLoopQuery(0), mnLoopWords(0), mnRelocQuery(0), mnRelocWords(0), mnBAGlobalForKF(0),
     fx(F.fx), fy(F.fy), cx(F.cx), cy(F.cy), invfx(F.invfx), invfy(F.invfy),
     mbf(F.mbf), mb(F.mb), mThDepth(F.mThDepth), N(F.N), mvKeys(F.mvKeys), mvKeysUn(F.mvKeysUn),
-    mvuRight(F.mvuRight), mvDepth(F.mvDepth), mDescriptors(F.mDescriptors.clone()),
+    mvuRight(F.mvuRight), mvDepth(F.mvDepth),
     mBowVec(F.mBowVec), mFeatVec(F.mFeatVec),  sizeTolerance(F.sizeTolerance),
     mnMinX(F.mnMinX), mnMinY(F.mnMinY), mnMaxX(F.mnMaxX),
     keyPtsSigma2(F.keyPtsSigma2),keyPtsInf(F.keyPtsInf),keyPtsSize(F.keyPtsSize),
     maxKeyPtSize(F.maxKeyPtSize),maxKeyPtSigma(F.maxKeyPtSigma),
     mnMaxY(F.mnMaxY), mK(F.mK), mvpMapPoints(F.pts), mpKeyFrameDB(pKFDB),
     vocabulary(F.vocabulary), mbFirstConnection(true), mpParent(NULL), mbNotErase(false),
-    mbToBeErased(false), mbBad(false), mHalfBaseline(F.mb/2), mpMap(pMap)
+    mbToBeErased(false), mbBad(false), mHalfBaseline(F.mb/2), mpMap(pMap), featureTypes(F.featureTypes)
 {
     keyId = nNextId++;
 
-    mGrid.resize(mnGridCols);
-    for(int i=0; i<mnGridCols;i++)
-    {
-        mGrid[i].resize(mnGridRows);
-        for(int j=0; j<mnGridRows; j++)
-            mGrid[i][j] = F.mGrid[i][j];
+    for(FeatureType ft : featureTypes){
+        mGrid[ft].resize(mnGridCols);
+        for(int i=0; i<mnGridCols;i++)
+        {
+            mGrid[ft][i].resize(mnGridRows);
+            for(int j=0; j<mnGridRows; j++)
+                mGrid[ft][i][j] = F.mGrid[ft][i][j];
+        }
     }
-
     SetPose(F.Tcw);
+
+    for(FeatureType ft : featureTypes)
+        mDescriptors[ft] = F.mDescriptors.at(ft).clone();
 }
 
-void KeyFrame::ComputeBoW()
+void KeyFrame::ComputeBoW(const FeatureType &featType)
 {
     if(mBowVec.empty() || mFeatVec.empty())
     {
         // Feature vector associate features with nodes in the 4th level (from leaves up)
         // We assume the vocabulary tree has 6 levels, change the 4 otherwise
-        vocabulary->transform(mDescriptors,mBowVec,mFeatVec);
+        vocabulary->transform(mDescriptors.at(featType),mBowVec,mFeatVec);
     }
 }
 
@@ -247,40 +251,40 @@ Pt KeyFrame::CreateMapPoint(const vec3f& worldPos, const KeypointIndex& refIndex
 void KeyFrame::AddMapPoint(Pt pt, const KeypointIndex& index)
 {
     unique_lock<mutex> lock(mMutexFeatures);
-    mvpMapPoints[index] = pt;
+    mvpMapPoints[pt->featureType][index] = pt;
 
     if (keyId == pt->GetCurrentRefKeyframe()->keyId)
         pt->SetRefIndex(index);
 }
 
-void KeyFrame::EraseMapPointMatch(const size_t &idx)
+void KeyFrame::EraseMapPointMatch(const size_t &idx, const FeatureType& featType)
 {
     unique_lock<mutex> lock(mMutexFeatures);
-    mvpMapPoints[idx]=static_cast<Pt>(NULL);
+    mvpMapPoints[featType][idx]=static_cast<Pt>(NULL);
 }
 
 void KeyFrame::EraseMapPointMatch(Pt pMP)
 {
     int idx = pMP->GetIndexInKeyFrame(thisKeyframe());
     if(idx>=0)
-        mvpMapPoints[idx]=static_cast<Pt>(NULL);
+        mvpMapPoints[pMP->featureType][idx]=static_cast<Pt>(NULL);
 }
 
 
 void KeyFrame::ReplaceMapPointMatch(const size_t &idx, Pt pMP)
 {
-    mvpMapPoints[idx]=pMP;
+    mvpMapPoints[pMP->featureType][idx]=pMP;
 }
 
-set<Pt> KeyFrame::GetMapPoints()
+set<Pt> KeyFrame::GetMapPoints(const FeatureType& featType)
 {
     unique_lock<mutex> lock(mMutexFeatures);
     set<Pt> s;
-    for(size_t i=0, iend=mvpMapPoints.size(); i<iend; i++)
+    for(size_t i=0, iend=mvpMapPoints.at(featType).size(); i<iend; i++)
     {
-        if(!mvpMapPoints[i])
+        if(!mvpMapPoints.at(featType)[i])
             continue;
-        Pt pMP = mvpMapPoints[i];
+        Pt pMP = mvpMapPoints.at(featType)[i];
         if(!pMP->isBad())
             s.insert(pMP);
     }
@@ -293,37 +297,40 @@ int KeyFrame::TrackedMapPoints(const int &minObs)
 
     int nPoints=0;
     const bool bCheckObs = minObs>0;
-    for(int i=0; i<N; i++)
-    {
-        Pt pMP = mvpMapPoints[i];
-        if(pMP)
+    for(const auto& [ft, pts] : mvpMapPoints){
+        for(int i = 0; i < N.at(ft); i++)
         {
-            if(!pMP->isBad())
+            Pt pMP = pts[i];
+            if(pMP)
             {
-                if(bCheckObs)
+                if(!pMP->isBad())
                 {
-                    if(mvpMapPoints[i]->NumberOfObservations() >= minObs)
+                    if(bCheckObs)
+                    {
+                        if(pts[i]->NumberOfObservations() >= minObs)
+                            nPoints++;
+                    }
+                    else
                         nPoints++;
                 }
-                else
-                    nPoints++;
             }
         }
     }
-
     return nPoints;
 }
 
-vector<Pt> KeyFrame::GetMapPointMatches()
+vector<Pt> KeyFrame::GetMapPointMatches(const FeatureType& featType)
 {
     unique_lock<mutex> lock(mMutexFeatures);
-    return mvpMapPoints;
+    if (mvpMapPoints.count(featType) == 0)
+        return vector<Pt>();
+    return mvpMapPoints.at(featType);
 }
 
-Pt KeyFrame::GetMapPoint(const size_t &idx)
+Pt KeyFrame::GetMapPoint(const size_t &idx, const FeatureType& featType)
 {
     unique_lock<mutex> lock(mMutexFeatures);
-    return mvpMapPoints[idx];
+    return mvpMapPoints.at(featType).at(idx);
 }
 
 void KeyFrame::UpdateConnections()
@@ -331,7 +338,7 @@ void KeyFrame::UpdateConnections()
     map<KeyframeId ,int> KFweightsCounter;
     map<KeyframeId ,Keyframe> KFcounter;
 
-    vector<Pt> pts;
+    std::map<FeatureType, vector<Pt>> pts;
     {
         unique_lock<mutex> lockMPs(mMutexFeatures);
         pts = mvpMapPoints;
@@ -339,22 +346,24 @@ void KeyFrame::UpdateConnections()
 
     //For all map points in keyframe check in which other keyframes are they seen
     //Increase counter for those keyframes
-    for(auto& pt: pts)
-    {
-        if(!pt)
-            continue;
-
-        if(pt->isBad())
-            continue;
-
-        map<KeyframeId , Obs> observations = pt->GetObservations();
-
-        for(auto& obs: observations)
+    for (auto const& [ft, pts_] : pts) {
+        for(auto& pt: pts_)
         {
-            if(obs.first == keyId)
+            if(!pt)
                 continue;
-            KFweightsCounter[obs.first]++;
-            KFcounter[obs.first] = obs.second->projKeyframe;
+
+            if(pt->isBad())
+                continue;
+
+            map<KeyframeId , Obs> observations = pt->GetObservations();
+
+            for(auto& obs: observations)
+            {
+                if(obs.first == keyId)
+                    continue;
+                KFweightsCounter[obs.first]++;
+                KFcounter[obs.first] = obs.second->projKeyframe;
+            }
         }
     }
 
@@ -505,9 +514,11 @@ void KeyFrame::SetBadFlag()
     for(auto& connectedKeyFrame: connectedKeyFrames)
         connectedKeyFrame.second->EraseConnection(thisKeyframe());
 
-    for(size_t i=0; i<mvpMapPoints.size(); i++){
-        if(mvpMapPoints[i]){
-            mvpMapPoints[i]->EraseObservation(thisKeyframe());
+    for (auto const& [ft, mapPoints] : mvpMapPoints) {
+        for(size_t i = 0; i < mapPoints.size(); i++){
+            if(mapPoints[i]){
+                mapPoints[i]->EraseObservation(thisKeyframe());
+            }
         }
     }
 
@@ -610,10 +621,10 @@ void KeyFrame::EraseConnection(Keyframe keyframe)
         UpdateBestCovisibles();
 }
 
-vector<size_t> KeyFrame::GetFeaturesInArea(const float &x, const float &y, const float &r) const
+vector<size_t> KeyFrame::GetFeaturesInArea(const float &x, const float &y, const float &r, const FeatureType& featType) const
 {
     vector<size_t> vIndices;
-    vIndices.reserve(N);
+    vIndices.reserve(N.at(featType));
 
     const int nMinCellX = max(0,(int)floor((x-mnMinX-r)*mfGridElementWidthInv));
     if(nMinCellX>=mnGridCols)
@@ -635,10 +646,10 @@ vector<size_t> KeyFrame::GetFeaturesInArea(const float &x, const float &y, const
     {
         for(int iy = nMinCellY; iy<=nMaxCellY; iy++)
         {
-            const vector<size_t> vCell = mGrid[ix][iy];
+            const vector<size_t> vCell = mGrid.at(featType)[ix][iy];
             for(size_t j=0, jend=vCell.size(); j<jend; j++)
             {
-                const cv::KeyPoint &kpUn = mvKeysUn[vCell[j]];
+                const cv::KeyPoint &kpUn = mvKeysUn.at(featType)[vCell[j]];
                 const float distx = kpUn.pt.x-x;
                 const float disty = kpUn.pt.y-y;
 
@@ -658,25 +669,27 @@ bool KeyFrame::IsInImage(const float &x, const float &y) const
 
 vec3f KeyFrame::UnprojectStereo(int i)
 {
-    const float z = mvDepth[i];
-    if(z>0)
-    {
-        const float u = mvKeys[i].pt.x;
-        const float v = mvKeys[i].pt.y;
-        const float x = (u-cx)*z*invfx;
-        const float y = (v-cy)*z*invfy;
-        vec3f x3Dc{x, y, z};
+    std::cout << "This function (KeyFrame::UnprojectStereo) has not been modified yet to work with AnyFeature-VSLAM"<< endl;
+    std::terminate();
+    // const float z = mvDepth[i];
+    // if(z>0)
+    // {
+    //     const float u = mvKeys[i].pt.x;
+    //     const float v = mvKeys[i].pt.y;
+    //     const float x = (u-cx)*z*invfx;
+    //     const float y = (v-cy)*z*invfy;
+    //     vec3f x3Dc{x, y, z};
 
-        unique_lock<mutex> lock(mMutexPose);
-        return Twc.block<3,3>(0,0) * x3Dc + Twc.block<3,1>(0,3);
-    }
-    else
-        return vec3f{0.0f,0.0f,-1.0f};
+    //     unique_lock<mutex> lock(mMutexPose);
+    //     return Twc.block<3,3>(0,0) * x3Dc + Twc.block<3,1>(0,3);
+    // }
+    // else
+    //     return vec3f{0.0f,0.0f,-1.0f};
 }
 
 float KeyFrame::ComputeSceneMedianDepth(const int q)
 {
-    vector<Pt> vpMapPoints;
+    std::map<FeatureType, std::vector<Pt>> vpMapPoints;
     mat4f Tcw_;
     {
         unique_lock<mutex> lock(mMutexFeatures);
@@ -686,68 +699,68 @@ float KeyFrame::ComputeSceneMedianDepth(const int q)
     }
 
     vector<float> vDepths;
-    vDepths.reserve(N);
     vec3f Rcw2 = Tcw_.block<1,3>(2,0).transpose();
     float zcw = Tcw_(2,3);
-    for(int i=0; i<N; i++)
-    {
-        if(mvpMapPoints[i])
+    for(FeatureType ft : featureTypes){
+        for(int i=0; i<N.at(ft); i++)
         {
-            Pt pMP = mvpMapPoints[i];
-            vec3f x3Dw = pMP->GetWorldPos();
-            float z = Rcw2.dot(x3Dw)+zcw;
-            vDepths.push_back(z);
+            if(mvpMapPoints[ft][i])
+            {
+                Pt pMP = mvpMapPoints[ft][i];
+                vec3f x3Dw = pMP->GetWorldPos();
+                float z = Rcw2.dot(x3Dw)+zcw;
+                vDepths.push_back(z);
+            }
         }
     }
-
     sort(vDepths.begin(),vDepths.end());
 
     return vDepths[(vDepths.size()-1)/q];
 }
 
-    float KeyFrame::GetKeyPtSize(const KeypointIndex &keyPtIdx) const {
-        return keyPtsSize[keyPtIdx];
+    float KeyFrame::GetKeyPtSize(const KeypointIndex &keyPtIdx, const FeatureType& featType) const {
+        return keyPtsSize.at(featType)[keyPtIdx];
     }
 
-    float KeyFrame::GetKeyPt1DSigma2(const KeypointIndex &keyPtIdx) const
+    float KeyFrame::GetKeyPt1DSigma2(const KeypointIndex &keyPtIdx, const FeatureType& featType) const
     {
-        return 0.5f * (keyPtsSigma2[keyPtIdx](0,0) + keyPtsSigma2[keyPtIdx](1,1));
+        return 0.5f * (keyPtsSigma2.at(featType)[keyPtIdx](0,0) + keyPtsSigma2.at(featType)[keyPtIdx](1,1));
     }
 
-    mat2f KeyFrame::GetKeyPt2DSigma2(const KeypointIndex &keyPtIdx) const
+    mat2f KeyFrame::GetKeyPt2DSigma2(const KeypointIndex &keyPtIdx, const FeatureType& featType) const
     {
-        return keyPtsSigma2[keyPtIdx];
+        return keyPtsSigma2.at(featType)[keyPtIdx];
     }
 
-    mat3f KeyFrame::GetKeyPt3DSigma2(const KeypointIndex &keyPtIdx) const
+    mat3f KeyFrame::GetKeyPt3DSigma2(const KeypointIndex &keyPtIdx, const FeatureType& featType) const
     {
         mat3f sigma2Matrix{mat3f::Zero()};
-        sigma2Matrix.block<2,2>(0,0) = keyPtsSigma2[keyPtIdx];
-        sigma2Matrix(2,2) = GetKeyPt1DSigma2(keyPtIdx);
+        sigma2Matrix.block<2,2>(0,0) = keyPtsSigma2.at(featType)[keyPtIdx];
+        sigma2Matrix(2,2) = GetKeyPt1DSigma2(keyPtIdx, featType);
         return sigma2Matrix;
     }
 
-    float KeyFrame::GetKeyPt1DInf(const KeypointIndex &keyPtIdx) const
+    float KeyFrame::GetKeyPt1DInf(const KeypointIndex &keyPtIdx, const FeatureType& featType) const
     {
-        return 0.5f * (keyPtsInf[keyPtIdx](0,0) + keyPtsInf[keyPtIdx](1,1));
+        return 0.5f * (keyPtsInf.at(featType)[keyPtIdx](0,0) + keyPtsInf.at(featType)[keyPtIdx](1,1));
     }
 
-    mat2f KeyFrame::GetKeyPt2DInf(const KeypointIndex &keyPtIdx) const
+    mat2f KeyFrame::GetKeyPt2DInf(const KeypointIndex &keyPtIdx, const FeatureType& featType) const
     {
-        return keyPtsInf[keyPtIdx];
+        return keyPtsInf.at(featType)[keyPtIdx];
     }
 
-    mat3f KeyFrame::GetKeyPt3DInf(const KeypointIndex &keyPtIdx) const
+    mat3f KeyFrame::GetKeyPt3DInf(const KeypointIndex &keyPtIdx, const FeatureType& featType) const
     {
         mat3f infMatrix{mat3f::Zero()};
-        infMatrix.block<2,2>(0,0) = keyPtsInf[keyPtIdx];
-        infMatrix(2,2) = GetKeyPt1DInf(keyPtIdx);
+        infMatrix.block<2,2>(0,0) = keyPtsInf.at(featType)[keyPtIdx];
+        infMatrix(2,2) = GetKeyPt1DInf(keyPtIdx, featType);
         return infMatrix;
     }
 
-    float KeyFrame::GetKeyPt1DSigma(const KeypointIndex &keyPtIdx) const
+    float KeyFrame::GetKeyPt1DSigma(const KeypointIndex &keyPtIdx, const FeatureType& featType) const
     {
-        return sqrtf(GetKeyPt1DSigma2(keyPtIdx));
+        return sqrtf(GetKeyPt1DSigma2(keyPtIdx, featType));
     }
 
 } //namespace ORB_SLAM

@@ -53,7 +53,7 @@ public:
 
     // if bFixScale is true, optimize SE3 (stereo,rgbd), Sim3 otherwise (mono)
     static int OptimizeSim3(Keyframe pKF1, Keyframe pKF2, std::vector<Pt> &vpMatches1,
-                            g2o::Sim3 &g2oS12, const float th2, const bool bFixScale);
+                            g2o::Sim3 &g2oS12, const float th2, const bool bFixScale, const FeatureType& featureType);
 
     // Heuristics
     static float chi2_2dof;

@@ -38,10 +38,10 @@ namespace ANYFEATURE_VSLAM
     LoopConnections::LoopConnections(const KeyframeId & keyframeId, const Keyframe& keyframe, const map<KeyframeId,Keyframe>& connections):
             keyframeId(keyframeId), keyframe(keyframe), connections(connections){}
 
-LoopClosing::LoopClosing(shared_ptr<Map>pMap, shared_ptr<KeyFrameDatabase>pDB, shared_ptr<Vocabulary> vocabulary, const bool bFixScale):
+LoopClosing::LoopClosing(shared_ptr<Map>pMap, shared_ptr<KeyFrameDatabase>pDB, shared_ptr<Vocabulary> vocabulary, const bool bFixScale, const FeatureType& featureType):
     mbResetRequested(false), mbFinishRequested(false), mbFinished(true), mpMap(pMap),
     mpKeyFrameDB(pDB), vocabulary(vocabulary), mpMatchedKF(NULL), mLastLoopKFid(0), mbRunningGBA(false), mbFinishedGBA(true),
-    mbStopGBA(false), mpThreadGBA(NULL), mbFixScale(bFixScale), mnFullBAIdx(0)
+    mbStopGBA(false), mpThreadGBA(NULL), mbFixScale(bFixScale), featureType(featureType), mnFullBAIdx(0)
 {
     mnCovisibilityConsistencyTh = 3;
 }
@@ -278,7 +278,7 @@ bool LoopClosing::ComputeSim3()
             continue;
         }
 
-        int nmatches = matcher.SearchByBoW(mpCurrentKF,pKF,vvpMapPointMatches[i]);
+        int nmatches = matcher.SearchByBoW(mpCurrentKF,pKF,vvpMapPointMatches[i], featureType);
 
         if(nmatches<20)
         {
@@ -287,7 +287,7 @@ bool LoopClosing::ComputeSim3()
         }
         else
         {
-            Sim3Solver* pSolver = new Sim3Solver(mpCurrentKF,pKF,vvpMapPointMatches[i],mbFixScale);
+            Sim3Solver* pSolver = new Sim3Solver(mpCurrentKF,pKF,vvpMapPointMatches[i],featureType, mbFixScale);
             pSolver->SetRansacParameters(0.99,20,300);
             vpSim3Solvers[i] = pSolver;
         }
@@ -336,10 +336,10 @@ bool LoopClosing::ComputeSim3()
                 mat3f R = pSolver->GetEstimatedRotation();
                 vec3f t = pSolver->GetEstimatedTranslation();
                 const float s = pSolver->GetEstimatedScale();
-                matcher.SearchBySim3(mpCurrentKF,pKF,vpMapPointMatches,s,R,t,7.5f);
+                matcher.SearchBySim3(mpCurrentKF,pKF,vpMapPointMatches,s,R,t,7.5f, featureType);
 
                 g2o::Sim3 gScm(R.cast<double>(),t.cast<double>(),s);
-                const int nInliers = Optimizer::OptimizeSim3(mpCurrentKF, pKF, vpMapPointMatches, gScm, 10, mbFixScale);
+                const int nInliers = Optimizer::OptimizeSim3(mpCurrentKF, pKF, vpMapPointMatches, gScm, 10, mbFixScale, featureType);
 
                 // If optimization is succesful stop ransacs and continue
                 if(nInliers>=20)
@@ -372,7 +372,7 @@ bool LoopClosing::ComputeSim3()
     for(vector<Keyframe>::iterator vit=vpLoopConnectedKFs.begin(); vit!=vpLoopConnectedKFs.end(); vit++)
     {
         Keyframe pKF = *vit;
-        vector<Pt> vpMapPoints = pKF->GetMapPointMatches();
+        vector<Pt> vpMapPoints = pKF->GetMapPointMatches(featureType);
         for(size_t i=0, iend=vpMapPoints.size(); i<iend; i++)
         {
             Pt pMP = vpMapPoints[i];
@@ -388,7 +388,7 @@ bool LoopClosing::ComputeSim3()
     }
 
     // Find more matches projecting with the computed Sim3
-    matcher.SearchByProjection(mpCurrentKF, mScw, mvpLoopMapPoints, mvpCurrentMatchedPoints,10.0f);
+    matcher.SearchByProjection(mpCurrentKF, mScw, mvpLoopMapPoints, mvpCurrentMatchedPoints,10.0f, featureType);
 
     // If enough matches accept Loop
     int nTotalMatches = 0;
@@ -493,7 +493,7 @@ void LoopClosing::CorrectLoop()
 
             g2o::Sim3 g2oSiw =NonCorrectedSim3[pKFi];
 
-            vector<Pt> vpMPsi = pKFi->GetMapPointMatches();
+            vector<Pt> vpMPsi = pKFi->GetMapPointMatches(featureType);
             for(size_t iMP=0, endMPi = vpMPsi.size(); iMP<endMPi; iMP++)
             {
                 Pt pMPi = vpMPsi[iMP];
@@ -537,7 +537,7 @@ void LoopClosing::CorrectLoop()
             if(mvpCurrentMatchedPoints[i])
             {
                 Pt pLoopMP = mvpCurrentMatchedPoints[i];
-                Pt pCurMP = mpCurrentKF->GetMapPoint(i);
+                Pt pCurMP = mpCurrentKF->GetMapPoint(i, featureType);
                 if(pCurMP)
                     pCurMP->Replace(pLoopMP);
                 else
@@ -610,7 +610,7 @@ void LoopClosing::SearchAndFuse(const KeyFrameAndPose &CorrectedPosesMap)
         mat4f cvScw = Converter::toMatrix4f(g2oScw);
 
         vector<Pt> vpReplacePoints(mvpLoopMapPoints.size(),static_cast<Pt>(NULL));
-        matcher.Fuse(pKF,cvScw,mvpLoopMapPoints,4.0f,vpReplacePoints);
+        matcher.Fuse(pKF,cvScw,mvpLoopMapPoints,4.0f,vpReplacePoints, featureType);
 
         // Get Map Mutex
         unique_lock<mutex> lock(mpMap->mMutexMapUpdate);

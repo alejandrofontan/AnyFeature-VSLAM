@@ -56,7 +56,7 @@ public:
     Tracking(System* pSys, shared_ptr<Vocabulary> vocabulary, std::shared_ptr<FrameDrawer> pFrameDrawer, std::shared_ptr<MapDrawer> pMapDrawer, shared_ptr<Map> pMap,
              shared_ptr<KeyFrameDatabase> pKFDB,
              const string &strCalibrationPath, const string &strSettingPath,
-             const string &feature_settings_yaml_file,
+             const std::map<FeatureType, string>& feature_settings_yaml_file,
              const int sensor,
              const vector<FeatureType>& featureTypes,
              const bool& fixImageSize = false);
@@ -122,6 +122,12 @@ public:
 
     size_t numTrackedFrames{2};
     vector<FeatureType> featureTypes{};
+    int featureInitialization{0};
+    int featureRelocalization{0};
+    int featureTrackRefKey{0};
+    int featureTrackWithMotionModel{0};
+    int featureSearchLocalPoints{0};
+    int featureGetFeatureExtractor{0};
 
 protected:
 
@@ -132,15 +138,15 @@ protected:
     void StereoInitialization();
 
     // Map initialization for monocular
-    void MonocularInitialization();
-    void CreateInitialMapMonocular();
+    void MonocularInitialization(const FeatureType& featureType);
+    void CreateInitialMapMonocular(const FeatureType& featureType);
 
     void CheckReplacedInLastFrame();
     bool TrackReferenceKeyFrame();
     void UpdateLastFrame();
     bool TrackWithMotionModel();
 
-    bool Relocalization();
+    bool Relocalization(const FeatureType& featureType);
 
     void UpdateLocalMap();
     void UpdateLocalPoints();
@@ -154,7 +160,8 @@ protected:
 
     void loadCameraParameters(const string &strCalibrationPath, const string &strSettingPath);
     shared_ptr<FeatureExtractor> getFeatureExtractor(const int& scaleNumFeaturesMonocular_,
-                                                     const string &featureSettingsYamlFile);
+                                                     const string &featureSettingsYamlFile, 
+                                                     const FeatureType& featureType);
     static void getGrayImage(cv::Mat& im, const bool& rgb);
 
     // In case of performing only localization, this flag is true when there are no matches to
@@ -168,8 +175,8 @@ protected:
     std::shared_ptr<LoopClosing> loopClosing;
 
     // Features
-    shared_ptr<FeatureExtractor> featureExtractorLeft, featureExtractorRight;
-    shared_ptr<FeatureExtractor> initFeatureExtractor;
+    std::map<FeatureType, shared_ptr<FeatureExtractor>> featureExtractorLeft, featureExtractorRight;
+    std::map<FeatureType, shared_ptr<FeatureExtractor>> initFeatureExtractor;
 
     //BoW
     shared_ptr<Vocabulary> vocabulary;

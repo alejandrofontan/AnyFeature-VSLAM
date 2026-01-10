@@ -35,13 +35,13 @@ namespace ANYFEATURE_VSLAM
 {
 
 
-Sim3Solver::Sim3Solver(Keyframe pKF1, Keyframe pKF2, const vector<Pt> &vpMatched12, const bool bFixScale):
-    mnIterations(0), mnBestInliers(0), mbFixScale(bFixScale)
+Sim3Solver::Sim3Solver(Keyframe pKF1, Keyframe pKF2, const vector<Pt> &vpMatched12, const FeatureType& featureType, const bool bFixScale):
+    mnIterations(0), mnBestInliers(0), mbFixScale(bFixScale), featureType(featureType)
 {
     mpKF1 = pKF1;
     mpKF2 = pKF2;
 
-    vector<Pt> vpKeyFrameMP1 = pKF1->GetMapPointMatches();
+    vector<Pt> vpKeyFrameMP1 = pKF1->GetMapPointMatches(featureType);
 
     mN1 = vpMatched12.size();
 
@@ -79,8 +79,8 @@ Sim3Solver::Sim3Solver(Keyframe pKF1, Keyframe pKF2, const vector<Pt> &vpMatched
             if(indexKF1<0 || indexKF2<0)
                 continue;
 
-            const float sigmaSquare1 = pKF1->GetKeyPt1DSigma2(indexKF1);
-            const float sigmaSquare2 = pKF2->GetKeyPt1DSigma2(indexKF2);
+            const float sigmaSquare1 = pKF1->GetKeyPt1DSigma2(indexKF1, featureType);
+            const float sigmaSquare2 = pKF2->GetKeyPt1DSigma2(indexKF2, featureType);
 
             mvnMaxError1.push_back(9.210*sigmaSquare1);
             mvnMaxError2.push_back(9.210*sigmaSquare2);

@@ -36,7 +36,7 @@ class Sim3Solver
 {
 public:
 
-    Sim3Solver(Keyframe pKF1, Keyframe pKF2, const std::vector<Pt> &vpMatched12, const bool bFixScale = true);
+    Sim3Solver(Keyframe pKF1, Keyframe pKF2, const std::vector<Pt> &vpMatched12, const FeatureType& featureType, const bool bFixScale = true);
 
     void SetRansacParameters(double probability = 0.99, int minInliers = 6 , int maxIterations = 300);
 
@@ -62,6 +62,8 @@ protected:
 
 
 protected:
+
+    FeatureType featureType;
 
     // KeyFrames and matches
     Keyframe mpKF1;

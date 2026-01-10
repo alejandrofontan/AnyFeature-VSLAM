@@ -63,7 +63,7 @@ public:
     vec3f GetTranslation();
 
     // Bag of Words Representation
-    void ComputeBoW();
+    void ComputeBoW(const FeatureType &featType);
 
     // Covisibility graph functions
     void AddConnection(Keyframe pKF, const int &weight);
@@ -98,16 +98,16 @@ public:
                       const FeatureType& featureType);
 
     void AddMapPoint(Pt pt, const KeypointIndex& index);
-    void EraseMapPointMatch(const size_t &idx);
+    void EraseMapPointMatch(const size_t &idx, const FeatureType& featType);
     void EraseMapPointMatch(Pt pMP);
     void ReplaceMapPointMatch(const size_t &idx, Pt pMP);
-    std::set<Pt> GetMapPoints();
-    std::vector<Pt> GetMapPointMatches();
+    std::set<Pt> GetMapPoints(const FeatureType& featType);
+    std::vector<Pt> GetMapPointMatches(const FeatureType& featType);
     int TrackedMapPoints(const int &minObs);
-    Pt GetMapPoint(const size_t &idx);
+    Pt GetMapPoint(const size_t &idx, const FeatureType& featType);
 
     // KeyPoint functions
-    std::vector<size_t> GetFeaturesInArea(const float &x, const float  &y, const float  &r) const;
+    std::vector<size_t> GetFeaturesInArea(const float &x, const float  &y, const float  &r, const FeatureType& featType) const;
     vec3f UnprojectStereo(int i);
 
     // Image
@@ -132,17 +132,19 @@ public:
         return pKF1->keyId < pKF2->keyId;
     }
 
-    [[nodiscard]] float GetKeyPtSize(const KeypointIndex &keyPtIdx) const;
-    [[nodiscard]] float GetKeyPt1DSigma2(const KeypointIndex &keyPtIdx) const;
-    [[nodiscard]] mat2f GetKeyPt2DSigma2(const KeypointIndex &keyPtIdx) const;
-    [[nodiscard]] mat3f GetKeyPt3DSigma2(const KeypointIndex &keyPtIdx) const;
-    [[nodiscard]] float GetKeyPt1DInf(const KeypointIndex &keyPtIdx) const;
-    [[nodiscard]] mat2f GetKeyPt2DInf(const KeypointIndex &keyPtIdx) const;
-    [[nodiscard]] mat3f GetKeyPt3DInf(const KeypointIndex &keyPtIdx) const;
-    [[nodiscard]] float GetKeyPt1DSigma(const KeypointIndex &keyPtIdx) const;
+    [[nodiscard]] float GetKeyPtSize(const KeypointIndex &keyPtIdx, const FeatureType& featType) const;
+    [[nodiscard]] float GetKeyPt1DSigma2(const KeypointIndex &keyPtIdx, const FeatureType& featType) const;
+    [[nodiscard]] mat2f GetKeyPt2DSigma2(const KeypointIndex &keyPtIdx, const FeatureType& featType) const;
+    [[nodiscard]] mat3f GetKeyPt3DSigma2(const KeypointIndex &keyPtIdx, const FeatureType& featType) const;
+    [[nodiscard]] float GetKeyPt1DInf(const KeypointIndex &keyPtIdx, const FeatureType& featType) const;
+    [[nodiscard]] mat2f GetKeyPt2DInf(const KeypointIndex &keyPtIdx, const FeatureType& featType) const;
+    [[nodiscard]] mat3f GetKeyPt3DInf(const KeypointIndex &keyPtIdx, const FeatureType& featType) const;
+    [[nodiscard]] float GetKeyPt1DSigma(const KeypointIndex &keyPtIdx, const FeatureType& featType) const;
 
     // The following variables are accesed from only 1 thread or never change (no mutex needed).
 public:
+
+    std::vector<FeatureType> featureTypes{};
 
     static long unsigned int nNextId;
     KeyframeId keyId;
@@ -180,14 +182,14 @@ public:
     const float fx, fy, cx, cy, invfx, invfy, mbf, mb, mThDepth;
 
     // Number of KeyPoints
-    const int N;
+    const std::map<FeatureType, int> N;
 
     // KeyPoints, stereo coordinate and descriptors (all associated by an index)
-    const std::vector<cv::KeyPoint> mvKeys;
-    const std::vector<cv::KeyPoint> mvKeysUn;
-    const std::vector<float> mvuRight; // negative value for monocular points
-    const std::vector<float> mvDepth; // negative value for monocular points
-    const cv::Mat mDescriptors;
+    const std::map<FeatureType, std::vector<cv::KeyPoint>> mvKeys;
+    const std::map<FeatureType, std::vector<cv::KeyPoint>> mvKeysUn;
+    const std::map<FeatureType, std::vector<float>> mvuRight; // negative value for monocular points
+    const std::map<FeatureType, std::vector<float>> mvDepth; // negative value for monocular points
+    std::map<FeatureType, cv::Mat> mDescriptors;
 
     //BoW
     DBoW2::BowVector mBowVec;
@@ -198,9 +200,9 @@ public:
 
     // Scale
     float sizeTolerance{};
-    vector<mat2f> keyPtsSigma2{};
-    vector<mat2f> keyPtsInf{};
-    vector<float> keyPtsSize{};
+    std::map<FeatureType, vector<mat2f>> keyPtsSigma2{};
+    std::map<FeatureType, vector<mat2f>> keyPtsInf{};
+    std::map<FeatureType, vector<float>> keyPtsSize{};
     float maxKeyPtSize{};
     float maxKeyPtSigma{};
 
@@ -224,14 +226,14 @@ protected:
     vec4f Cw; // Stereo middel point. Only for visualization
 
     // MapPoints associated to keypoints
-    std::vector<Pt> mvpMapPoints;
+    std::map<FeatureType, std::vector<Pt>> mvpMapPoints;
 
     // BoW
     shared_ptr<KeyFrameDatabase> mpKeyFrameDB;
     shared_ptr<Vocabulary> vocabulary;
 
     // Grid over the image to speed up feature matching
-    std::vector< std::vector <std::vector<size_t> > > mGrid;
+    std::map<FeatureType, std::vector< std::vector <std::vector<size_t>>>> mGrid;
 
     std::map<KeyframeId, Keyframe> connectedKeyFrames;
     std::map<KeyframeId,int> connectedKeyFrameWeights;

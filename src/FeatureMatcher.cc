@@ -70,7 +70,7 @@ FeatureMatcher::FeatureMatcher(float nnratio, bool checkOri): mfNNratio(nnratio)
 
 // SearchByProjection 1
 // TrackLocalMap
-int FeatureMatcher::SearchByProjection(Frame &F, const vector<Pt> &vpMapPoints, const float& radiusTh)
+int FeatureMatcher::SearchByProjection(Frame &F, const vector<Pt> &vpMapPoints, const float& radiusTh, const FeatureType& featType)
 {
     int nmatches=0;
 
@@ -92,7 +92,7 @@ int FeatureMatcher::SearchByProjection(Frame &F, const vector<Pt> &vpMapPoints, 
 
         const vector<size_t> vIndices =
                 F.GetFeaturesInArea(pMP->mTrackProjX,pMP->mTrackProjY, r,
-                                    (pMP->trackSize / F.sizeTolerance),(pMP->trackSize * F.sizeTolerance));
+                                    (pMP->trackSize / F.sizeTolerance),(pMP->trackSize * F.sizeTolerance), featType);
 
         if(vIndices.empty())
             continue;
@@ -107,19 +107,19 @@ int FeatureMatcher::SearchByProjection(Frame &F, const vector<Pt> &vpMapPoints, 
         {
             const size_t idx = *vit;
 
-            if(F.pts[idx])
-                if(F.pts[idx]->NumberOfObservations() > 0)
+            if(F.pts.at(featType)[idx])
+                if(F.pts.at(featType)[idx]->NumberOfObservations() > 0)
                     continue;
 
-            if(F.mvuRight[idx]>0)
+            if(F.mvuRight.at(featType)[idx]>0)
             {
-                const float er = fabs(pMP->mTrackProjXR-F.mvuRight[idx]);
+                const float er = fabs(pMP->mTrackProjXR-F.mvuRight.at(featType)[idx]);
                 if(er > r * pMP->trackSigma)
                     continue;
             }
 
-            const cv::Mat &descriptor = F.mDescriptors.row(idx);
-            const Descriptor_Distance_Type descDist = DescriptorDistance(refDescriptor,descriptor,pMP->descriptorType);
+            const cv::Mat &descriptor = F.mDescriptors.at(featType).row(idx);
+            const Descriptor_Distance_Type descDist = DescriptorDistance(refDescriptor,descriptor, pMP->descriptorType);
 
             if(descDist < bestDist)
             {
@@ -127,12 +127,12 @@ int FeatureMatcher::SearchByProjection(Frame &F, const vector<Pt> &vpMapPoints, 
                 bestDist = descDist;
                 bestIdx = idx;
                 bestSize2 = bestSize;
-                bestSize = F.GetKeyPtSize(KeypointIndex(idx));
+                bestSize = F.GetKeyPtSize(KeypointIndex(idx), featType);
             }
             else if(descDist < bestDist2)
             {
                 bestDist2 = descDist;
-                bestSize2 = F.GetKeyPtSize(KeypointIndex(idx));
+                bestSize2 = F.GetKeyPtSize(KeypointIndex(idx), featType);
             }
         }
 
@@ -145,7 +145,7 @@ int FeatureMatcher::SearchByProjection(Frame &F, const vector<Pt> &vpMapPoints, 
                 }
             }
 
-            F.pts[bestIdx]=pMP;
+            F.pts.at(featType)[bestIdx]=pMP;
             nmatches++;
         }
     }
@@ -183,11 +183,11 @@ bool FeatureMatcher::CheckDistEpipolarLine(const cv::KeyPoint &kp1, const cv::Ke
 
 // SearchByBoW 1
 // TrackReferenceKeyframe & Relocalization
-int FeatureMatcher::SearchByBoW(Keyframe pKF, Frame &F, vector<Pt> &vpMapPointMatches)
+int FeatureMatcher::SearchByBoW(Keyframe pKF, Frame &F, vector<Pt> &vpMapPointMatches, const FeatureType& featType)
 {
-    const vector<Pt> vpMapPointsKF = pKF->GetMapPointMatches();
+    const vector<Pt> vpMapPointsKF = pKF->GetMapPointMatches(featType);
 
-    vpMapPointMatches = vector<Pt>(F.N,static_cast<Pt>(NULL));
+    vpMapPointMatches = vector<Pt>(F.N.at(featType),static_cast<Pt>(NULL));
 
     const DBoW2::FeatureVector &vFeatVecKF = pKF->mFeatVec;
 
@@ -221,7 +221,7 @@ int FeatureMatcher::SearchByBoW(Keyframe pKF, Frame &F, vector<Pt> &vpMapPointMa
                 if(pMP->isBad())
                     continue;                
 
-                const cv::Mat &refDescriptor= pKF->mDescriptors.row(realIdxKF);
+                const cv::Mat &refDescriptor= pKF->mDescriptors.at(featType).row(realIdxKF);
                 Descriptor_Distance_Type bestDist1{highestPossibleDistance},bestDist2{highestPossibleDistance};
                 int bestIdxF{-1} ;
 
@@ -232,7 +232,7 @@ int FeatureMatcher::SearchByBoW(Keyframe pKF, Frame &F, vector<Pt> &vpMapPointMa
                     if(vpMapPointMatches[realIdxF])
                         continue;
 
-                    const cv::Mat &descriptor = F.mDescriptors.row(realIdxF);
+                    const cv::Mat &descriptor = F.mDescriptors.at(featType).row(realIdxF);
                     const Descriptor_Distance_Type descDist =  DescriptorDistance(refDescriptor,descriptor,pMP->descriptorType);
 
                     if(descDist < bestDist1)
@@ -253,10 +253,10 @@ int FeatureMatcher::SearchByBoW(Keyframe pKF, Frame &F, vector<Pt> &vpMapPointMa
                     {
                         vpMapPointMatches[bestIdxF]=pMP;
 
-                        const cv::KeyPoint &kp = pKF->mvKeysUn[realIdxKF];
+                        const cv::KeyPoint &kp = pKF->mvKeysUn.at(featType)[realIdxKF];
                         nMatches++;
                         if(mbCheckOrientation)
-                            updateRotationHistogram(rotHist,bestIdxF,kp,F.mvKeys[bestIdxF],rotFactor,HISTO_LENGTH);
+                            updateRotationHistogram(rotHist,bestIdxF,kp,F.mvKeys.at(featType)[bestIdxF],rotFactor,HISTO_LENGTH);
                     }
                 }
 
@@ -284,8 +284,10 @@ int FeatureMatcher::SearchByBoW(Keyframe pKF, Frame &F, vector<Pt> &vpMapPointMa
 
 // SearchByProjection 2
 // Compute Sim3
-int FeatureMatcher::SearchByProjection(Keyframe pKF, const mat4f& Scw, const vector<Pt> &vpPoints, vector<Pt> &vpMatched, const float& radiusTh)
+int FeatureMatcher::SearchByProjection(Keyframe pKF, const mat4f& Scw, const vector<Pt> &vpPoints, vector<Pt> &vpMatched, 
+    const float& radiusTh, const FeatureType& featType)
 {
+
     // Get Calibration Parameters for later projection
     const float &fx = pKF->fx;
     const float &fy = pKF->fy;
@@ -355,7 +357,7 @@ int FeatureMatcher::SearchByProjection(Keyframe pKF, const mat4f& Scw, const vec
         // Search in a radius
         float predictedSize = pMP->PredictSize(dist3D);
         const float radius = radiusScale * radiusTh * predictedSize;
-        const vector<size_t> vIndices = pKF->GetFeaturesInArea(u,v,radius);
+        const vector<size_t> vIndices = pKF->GetFeaturesInArea(u,v,radius, featType);
 
         if(vIndices.empty())
             continue;
@@ -371,11 +373,11 @@ int FeatureMatcher::SearchByProjection(Keyframe pKF, const mat4f& Scw, const vec
             if(vpMatched[idx])
                 continue;
 
-            const float keyPtSize = pKF->GetKeyPtSize(KeypointIndex (idx));
+            const float keyPtSize = pKF->GetKeyPtSize(KeypointIndex (idx), featType);
             if((keyPtSize < predictedSize / pKF->sizeTolerance) || (keyPtSize > predictedSize * pKF->sizeTolerance))
                 continue;
 
-            const cv::Mat &descriptor = pKF->mDescriptors.row(idx);
+            const cv::Mat &descriptor = pKF->mDescriptors.at(featType).row(idx);
             const Descriptor_Distance_Type descDist = DescriptorDistance(refDescriptor,descriptor,pMP->descriptorType);
 
             if(descDist < bestDist)
@@ -397,107 +399,30 @@ int FeatureMatcher::SearchByProjection(Keyframe pKF, const mat4f& Scw, const vec
 }
 
 int FeatureMatcher::SearchForInitialization(Frame &F1, Frame &F2, vector<cv::Point2f> &vbPrevMatched, vector<int> &vnMatches12, const int& windowSize,
-                                            const DescriptorType& descriptorType)
+                                            const DescriptorType& descriptorType, const FeatureType& featType)
 {
-
-// #ifndef VANILLA_ORB_SLAM2
-//     {
-
-//         //static size_t frame_id_0 = 0;
-//         static vector<Descriptor_Distance_Type> matchDistances;
-//         static vector<int> numCandidates;
-/*
-        //if(F1.mnId != frame_id_0){
-            frame_id_0 = F1.mnId;
-            matchDistances.clear();
-            numCandidates.clear();
-        //}
-
-        unordered_map<KeypointIndex, Descriptor_Distance_Type> bestMatchDistances{};
-        unordered_map<KeypointIndex, int> bestNumCandidates{};
-
-        for(KeypointIndex i1{0}; i1 < F1.mvKeysUn.size(); i1++)
-        {
-
-            if(F1.mvKeysUn[i1].octave > 0)
-                continue;
-
-            vector<size_t> vIndices2 = F2.GetFeaturesInArea(vbPrevMatched[i1].x,vbPrevMatched[i1].y, windowSize,0.0f,F1.maxKeyPtSize);
-            if(vIndices2.empty())
-                continue;
-
-            cv::Mat refDescriptor = F1.mDescriptors.row(i1);
-            Descriptor_Distance_Type bestDist{highestPossibleDistance}, bestDist2{highestPossibleDistance};
-            KeypointIndex bestIdx2{-1};
-
-            int numCandidates_i{0};
-            for(auto& i2: vIndices2)
-            {
-                if(F2.mvKeysUn[i2].octave > 0)
-                    continue;
-
-                cv::Mat descriptor = F2.mDescriptors.row(i2);
-                Descriptor_Distance_Type descDist = DescriptorDistance(refDescriptor,descriptor,descriptorType);
-
-                if(descDist < bestDist)
-                {
-                    bestDist2 = bestDist;
-                    bestDist = descDist;
-                    bestIdx2 = KeypointIndex(i2);
-                }
-                else if(descDist < bestDist2)
-                {
-                    bestDist2 = descDist;
-                }
-                numCandidates_i++;
-            }
-
-            if(float(bestDist) > (float) bestDist2 * mfNNratio)
-                continue;
-
-            auto bestMatchDistance = bestMatchDistances.find(bestIdx2);
-            if(bestMatchDistance != bestMatchDistances.end()){
-                if(bestMatchDistance->second <= bestDist)
-                    continue;
-            }
-            bestMatchDistances[bestIdx2] = bestDist;
-            bestNumCandidates[bestIdx2] = numCandidates_i;
-        }
-
-        for(int i{0}; i < bestMatchDistances.size(); i++){
-            if(bestMatchDistances[i] > 0){
-                matchDistances.emplace_back(bestMatchDistances[i]);
-                numCandidates.emplace_back(bestNumCandidates[i]);
-            }
-        }
-*/
-        //setDescriptorDistanceThresholds(matchDistances,numCandidates,descriptorType);
-        //terminate();
-//     }
-// #endif
-
-    vnMatches12 = vector<int>(F1.mvKeysUn.size(),-1);
+    vnMatches12 = vector<int>(F1.mvKeysUn.at(featType).size(),-1);
 
     int nMatches{0};
     float rotFactor{};
     vector<vector<int>> rotHist = initRotationHistogram(rotFactor,HISTO_LENGTH);
 
-    vector<Descriptor_Distance_Type> vMatchedDistance(F2.mvKeysUn.size(),highestPossibleDistance);
-    vector<int> vnMatches21(F2.mvKeysUn.size(),-1);
+    vector<Descriptor_Distance_Type> vMatchedDistance(F2.mvKeysUn.at(featType).size(),highestPossibleDistance);
+    vector<int> vnMatches21(F2.mvKeysUn.at(featType).size(),-1);
 
-    for(size_t i1=0, iend1=F1.mvKeysUn.size(); i1<iend1; i1++)
+    for(size_t i1=0, iend1=F1.mvKeysUn.at(featType).size(); i1<iend1; i1++)
     {
-        cv::KeyPoint kp1 = F1.mvKeysUn[i1];
+        cv::KeyPoint kp1 = F1.mvKeysUn.at(featType)[i1];
         int level1 = kp1.octave;
         if(level1 > 0)
             continue;
 
         vector<size_t> vIndices2 = F2.GetFeaturesInArea(vbPrevMatched[i1].x,vbPrevMatched[i1].y, windowSize,
-                                                        0.0f,F1.maxKeyPtSize);
+                                                        0.0f,F1.maxKeyPtSize, featType);
         if(vIndices2.empty())
             continue;
 
-        cv::Mat refDescriptor = F1.mDescriptors.row(i1);
+        cv::Mat refDescriptor = F1.mDescriptors.at(featType).row(i1);
         Descriptor_Distance_Type bestDist{highestPossibleDistance}, bestDist2{highestPossibleDistance};
         int bestIdx2{-1};
 
@@ -505,7 +430,7 @@ int FeatureMatcher::SearchForInitialization(Frame &F1, Frame &F2, vector<cv::Poi
         {
             size_t i2 = *vit;
 
-            cv::Mat descriptor = F2.mDescriptors.row(i2);
+            cv::Mat descriptor = F2.mDescriptors.at(featType).row(i2);
             Descriptor_Distance_Type descDist = DescriptorDistance(refDescriptor,descriptor,descriptorType);
 
             if(vMatchedDistance[i2] <= descDist)
@@ -538,7 +463,7 @@ int FeatureMatcher::SearchForInitialization(Frame &F1, Frame &F2, vector<cv::Poi
                 nMatches++;
 
                 if(mbCheckOrientation)
-                    updateRotationHistogram(rotHist,i1,F1.mvKeysUn[i1],F2.mvKeysUn[bestIdx2],rotFactor,HISTO_LENGTH);
+                    updateRotationHistogram(rotHist,i1,F1.mvKeysUn.at(featType)[i1],F2.mvKeysUn.at(featType)[bestIdx2],rotFactor,HISTO_LENGTH);
 
             }
         }
@@ -551,24 +476,25 @@ int FeatureMatcher::SearchForInitialization(Frame &F1, Frame &F2, vector<cv::Poi
     //Update prev matched
     for(size_t i1=0, iend1=vnMatches12.size(); i1<iend1; i1++)
         if(vnMatches12[i1]>=0)
-            vbPrevMatched[i1]=F2.mvKeysUn[vnMatches12[i1]].pt;
+            vbPrevMatched[i1]=F2.mvKeysUn.at(featType)[vnMatches12[i1]].pt;
 
     return nMatches;
 }
 
 // SearchByBoW 2
 // ComputeSim3
-int FeatureMatcher::SearchByBoW(Keyframe pKF1, Keyframe pKF2, vector<Pt > &vpMatches12)
+int FeatureMatcher::SearchByBoW(Keyframe pKF1, Keyframe pKF2, vector<Pt > &vpMatches12, const FeatureType&  featType)
 {
-    const vector<cv::KeyPoint> &vKeysUn1 = pKF1->mvKeysUn;
-    const DBoW2::FeatureVector &vFeatVec1 = pKF1->mFeatVec;
-    const vector<Pt> vpMapPoints1 = pKF1->GetMapPointMatches();
-    const cv::Mat &Descriptors1 = pKF1->mDescriptors;
 
-    const vector<cv::KeyPoint> &vKeysUn2 = pKF2->mvKeysUn;
+    const vector<cv::KeyPoint> &vKeysUn1 = pKF1->mvKeysUn.at(featType);
+    const DBoW2::FeatureVector &vFeatVec1 = pKF1->mFeatVec;
+    const vector<Pt> vpMapPoints1 = pKF1->GetMapPointMatches(featType);
+    const cv::Mat &Descriptors1 = pKF1->mDescriptors.at(featType);
+
+    const vector<cv::KeyPoint> &vKeysUn2 = pKF2->mvKeysUn.at(featType);
     const DBoW2::FeatureVector &vFeatVec2 = pKF2->mFeatVec;
-    const vector<Pt> vpMapPoints2 = pKF2->GetMapPointMatches();
-    const cv::Mat &Descriptors2 = pKF2->mDescriptors;
+    const vector<Pt> vpMapPoints2 = pKF2->GetMapPointMatches(featType);
+    const cv::Mat &Descriptors2 = pKF2->mDescriptors.at(featType);
 
     vpMatches12 = vector<Pt>(vpMapPoints1.size(),static_cast<Pt>(NULL));
     vector<bool> vbMatched2(vpMapPoints2.size(),false);
@@ -660,8 +586,10 @@ int FeatureMatcher::SearchByBoW(Keyframe pKF1, Keyframe pKF2, vector<Pt > &vpMat
 }
 
 int FeatureMatcher::SearchForTriangulation(Keyframe pKF1, Keyframe pKF2, const mat3f& F12,
-                                           vector<pair<size_t, size_t> > &vMatchedPairs, const bool bOnlyStereo, const DescriptorType& descriptorType)
+                                           vector<pair<size_t, size_t> > &vMatchedPairs, const bool bOnlyStereo, 
+                                           const DescriptorType& descriptorType, const FeatureType& featType)
 {    
+
     const DBoW2::FeatureVector &vFeatVec1 = pKF1->mFeatVec;
     const DBoW2::FeatureVector &vFeatVec2 = pKF2->mFeatVec;
 
@@ -678,8 +606,8 @@ int FeatureMatcher::SearchForTriangulation(Keyframe pKF1, Keyframe pKF2, const m
     // Matching speed-up by ORB Vocabulary
     // Compare only ORB that share the same node
 
-    vector<bool> vbMatched2(pKF2->N,false);
-    vector<int> vMatches12(pKF1->N,-1);
+    vector<bool> vbMatched2(pKF2->N.at(featType),false);
+    vector<int> vMatches12(pKF1->N.at(featType),-1);
 
     int nMatches{0};
 
@@ -696,21 +624,21 @@ int FeatureMatcher::SearchForTriangulation(Keyframe pKF1, Keyframe pKF2, const m
             {
                 const size_t idx1 = f1it->second[i1];
                 
-                Pt pMP1 = pKF1->GetMapPoint(idx1);
+                Pt pMP1 = pKF1->GetMapPoint(idx1, featType);
                 
                 // If there is already a MapPoint skip
                 if(pMP1)
                     continue;
 
-                const bool bStereo1 = pKF1->mvuRight[idx1]>=0;
+                const bool bStereo1 = pKF1->mvuRight.at(featType)[idx1]>=0;
 
                 if(bOnlyStereo)
                     if(!bStereo1)
                         continue;
                 
-                const cv::KeyPoint &kp1 = pKF1->mvKeysUn[idx1];
+                const cv::KeyPoint &kp1 = pKF1->mvKeysUn.at(featType)[idx1];
                 
-                const cv::Mat &refDescriptor = pKF1->mDescriptors.row(idx1);
+                const cv::Mat &refDescriptor = pKF1->mDescriptors.at(featType).row(idx1);
                 Descriptor_Distance_Type bestDist{TH_LOW};
                 int bestIdx2{-1};
                 
@@ -718,36 +646,36 @@ int FeatureMatcher::SearchForTriangulation(Keyframe pKF1, Keyframe pKF2, const m
                 {
                     size_t idx2 = f2it->second[i2];
                     
-                    Pt pMP2 = pKF2->GetMapPoint(idx2);
+                    Pt pMP2 = pKF2->GetMapPoint(idx2, featType);
                     
                     // If we have already matched or there is a MapPoint skip
                     if(vbMatched2[idx2] || pMP2)
                         continue;
 
-                    const bool bStereo2 = pKF2->mvuRight[idx2]>=0;
+                    const bool bStereo2 = pKF2->mvuRight.at(featType)[idx2]>=0;
 
                     if(bOnlyStereo)
                         if(!bStereo2)
                             continue;
                     
-                    const cv::Mat &descriptor = pKF2->mDescriptors.row(idx2);
+                    const cv::Mat &descriptor = pKF2->mDescriptors.at(featType).row(idx2);
                     const Descriptor_Distance_Type descDist = DescriptorDistance(refDescriptor,descriptor,descriptorType);
 
                     if(descDist > TH_LOW || descDist > bestDist)
                         continue;
 
-                    const cv::KeyPoint &kp2 = pKF2->mvKeysUn[idx2];
+                    const cv::KeyPoint &kp2 = pKF2->mvKeysUn.at(featType)[idx2];
 
                     if(!bStereo1 && !bStereo2)
                     {
                         const float distex = ex-kp2.pt.x;
                         const float distey = ey-kp2.pt.y;
 
-                        if(distex*distex+distey*distey < 100.0f * sqrtf(pKF2->GetKeyPt1DSigma2(KeypointIndex(idx2))))
+                        if(distex*distex+distey*distey < 100.0f * sqrtf(pKF2->GetKeyPt1DSigma2(KeypointIndex(idx2), featType)))
                             continue;
                     }
 
-                    float sigma2_kp2 = pKF2->GetKeyPt1DSigma2(KeypointIndex(idx2));
+                    float sigma2_kp2 = pKF2->GetKeyPt1DSigma2(KeypointIndex(idx2), featType);
                     if(CheckDistEpipolarLine(kp1,kp2,F12,pKF2,sigma2_kp2))
                     {
                         bestIdx2 = idx2;
@@ -757,7 +685,7 @@ int FeatureMatcher::SearchForTriangulation(Keyframe pKF1, Keyframe pKF2, const m
                 
                 if(bestIdx2>=0)
                 {
-                    const cv::KeyPoint &kp2 = pKF2->mvKeysUn[bestIdx2];
+                    const cv::KeyPoint &kp2 = pKF2->mvKeysUn.at(featType)[bestIdx2];
                     vMatches12[idx1] = bestIdx2;
                     nMatches++;
                 }
@@ -791,8 +719,9 @@ int FeatureMatcher::SearchForTriangulation(Keyframe pKF1, Keyframe pKF2, const m
 
 // Fuse 1
 // Local Mapping
-int FeatureMatcher::Fuse(Keyframe pKF, const vector<Pt> &vpMapPoints, const float& radiusTh)
+int FeatureMatcher::Fuse(Keyframe pKF, const vector<Pt> &vpMapPoints, const float& radiusTh, const FeatureType& featType)
 {
+
     mat3f Rcw = pKF->GetRotation();
     vec3f tcw = pKF->GetTranslation();
 
@@ -857,7 +786,7 @@ int FeatureMatcher::Fuse(Keyframe pKF, const vector<Pt> &vpMapPoints, const floa
         float predictedSize = pMP->PredictSize(dist3D);
         const float radius = radiusScale * radiusTh * predictedSize;
 
-        const vector<size_t> vIndices = pKF->GetFeaturesInArea(u,v,radius);
+        const vector<size_t> vIndices = pKF->GetFeaturesInArea(u,v,radius, featType);
 
         if(vIndices.empty())
             continue;
@@ -871,24 +800,24 @@ int FeatureMatcher::Fuse(Keyframe pKF, const vector<Pt> &vpMapPoints, const floa
         {
             const size_t idx = *vit;
 
-            const cv::KeyPoint &kp = pKF->mvKeysUn[idx];
+            const cv::KeyPoint &kp = pKF->mvKeysUn.at(featType)[idx];
 
-            const float keyPtSize = pKF->GetKeyPtSize(KeypointIndex (idx));
+            const float keyPtSize = pKF->GetKeyPtSize(KeypointIndex (idx), featType);
             if((keyPtSize < predictedSize / pKF->sizeTolerance) || (keyPtSize > predictedSize * pKF->sizeTolerance))
                 continue;
 
-            if(pKF->mvuRight[idx]>=0)
+            if(pKF->mvuRight.at(featType)[idx]>=0)
             {
                 // Check reprojection error in stereo
                 const float &kpx = kp.pt.x;
                 const float &kpy = kp.pt.y;
-                const float &kpr = pKF->mvuRight[idx];
+                const float &kpr = pKF->mvuRight.at(featType)[idx];
                 const float ex = u-kpx;
                 const float ey = v-kpy;
                 const float er = ur-kpr;
                 const float e2 = ex*ex+ey*ey+er*er;
 
-                if(e2 * pKF->GetKeyPt1DInf(KeypointIndex (idx)) > 7.8)
+                if(e2 * pKF->GetKeyPt1DInf(KeypointIndex (idx), featType) > 7.8)
                     continue;
             }
             else
@@ -899,11 +828,11 @@ int FeatureMatcher::Fuse(Keyframe pKF, const vector<Pt> &vpMapPoints, const floa
                 const float ey = v-kpy;
                 const float e2 = ex*ex+ey*ey;
 
-                if(e2 * pKF->GetKeyPt1DInf(KeypointIndex (idx)) > 5.99)
+                if(e2 * pKF->GetKeyPt1DInf(KeypointIndex (idx), featType) > 5.99)
                     continue;
             }
 
-            const cv::Mat &descriptor = pKF->mDescriptors.row(idx);
+            const cv::Mat &descriptor = pKF->mDescriptors.at(featType).row(idx);
             const Descriptor_Distance_Type descDist = DescriptorDistance(refDescriptor,descriptor,pMP->descriptorType);
 
             if(descDist < bestDist)
@@ -916,7 +845,7 @@ int FeatureMatcher::Fuse(Keyframe pKF, const vector<Pt> &vpMapPoints, const floa
         // If there is already a MapPoint replace otherwise add new measurement
         if(bestDist <= TH_LOW)
         {
-            Pt pMPinKF = pKF->GetMapPoint(bestIdx);
+            Pt pMPinKF = pKF->GetMapPoint(bestIdx, featType);
             if(pMPinKF)
             {
                 if(!pMPinKF->isBad())
@@ -941,7 +870,7 @@ int FeatureMatcher::Fuse(Keyframe pKF, const vector<Pt> &vpMapPoints, const floa
 
 // Fuse 2
 // Loop Closing
-int FeatureMatcher::Fuse(Keyframe pKF, const mat4f& Scw, const vector<Pt> &vpPoints, const float& radiusTh, vector<Pt> &vpReplacePoint)
+int FeatureMatcher::Fuse(Keyframe pKF, const mat4f& Scw, const vector<Pt> &vpPoints, const float& radiusTh, vector<Pt> &vpReplacePoint, const FeatureType& featType)
 {
 
     // Get Calibration Parameters for later projection
@@ -958,7 +887,7 @@ int FeatureMatcher::Fuse(Keyframe pKF, const mat4f& Scw, const vector<Pt> &vpPoi
     vec3f Ow = -Rcw.transpose() * tcw;
 
     // Set of MapPoints already found in the KeyFrame
-    const set<Pt> spAlreadyFound = pKF->GetMapPoints();
+    const set<Pt> spAlreadyFound = pKF->GetMapPoints(featType);
 
     int nFused=0;
 
@@ -1014,7 +943,7 @@ int FeatureMatcher::Fuse(Keyframe pKF, const mat4f& Scw, const vector<Pt> &vpPoi
         const float predictedSize = pMP->PredictSize(dist3D);
         const float radius = radiusScale * radiusTh * predictedSize;
 
-        const vector<size_t> vIndices = pKF->GetFeaturesInArea(u,v,radius);
+        const vector<size_t> vIndices = pKF->GetFeaturesInArea(u,v,radius, featType);
 
         if(vIndices.empty())
             continue;
@@ -1028,11 +957,11 @@ int FeatureMatcher::Fuse(Keyframe pKF, const mat4f& Scw, const vector<Pt> &vpPoi
         {
             const size_t idx = *vit;
 
-            const float keyPtSize = pKF->GetKeyPtSize(KeypointIndex (idx));
+            const float keyPtSize = pKF->GetKeyPtSize(KeypointIndex (idx), featType);
             if((keyPtSize < predictedSize / pKF->sizeTolerance) || (keyPtSize > predictedSize * pKF->sizeTolerance))
                 continue;
 
-            const cv::Mat &descriptor = pKF->mDescriptors.row(idx);
+            const cv::Mat &descriptor = pKF->mDescriptors.at(featType).row(idx);
             Descriptor_Distance_Type descDist = DescriptorDistance(refDescriptor,descriptor,pMP->descriptorType);
 
             if(descDist < bestDist)
@@ -1045,7 +974,7 @@ int FeatureMatcher::Fuse(Keyframe pKF, const mat4f& Scw, const vector<Pt> &vpPoi
         // If there is already a MapPoint replace otherwise add new measurement
         if(bestDist <= TH_LOW)
         {
-            Pt pMPinKF = pKF->GetMapPoint(bestIdx);
+            Pt pMPinKF = pKF->GetMapPoint(bestIdx, featType);
             if(pMPinKF)
             {
                 if(!pMPinKF->isBad())
@@ -1064,7 +993,7 @@ int FeatureMatcher::Fuse(Keyframe pKF, const mat4f& Scw, const vector<Pt> &vpPoi
 }
 
 int FeatureMatcher::SearchBySim3(Keyframe pKF1, Keyframe pKF2, vector<Pt> &vpMatches12,
-                                 const float &s12, const mat3f  &R12, const vec3f &t12, const float& radiusTh)
+                                 const float &s12, const mat3f  &R12, const vec3f &t12, const float& radiusTh, const FeatureType& featType)
 {
 
     const float &fx = pKF1->fx;
@@ -1085,10 +1014,10 @@ int FeatureMatcher::SearchBySim3(Keyframe pKF1, Keyframe pKF2, vector<Pt> &vpMat
     mat3f sR21 = (1.0/s12) * R12.transpose();
     vec3f t21 = -sR21 * t12;
 
-    const vector<Pt> vpMapPoints1 = pKF1->GetMapPointMatches();
+    const vector<Pt> vpMapPoints1 = pKF1->GetMapPointMatches(featType);
     const int N1 = vpMapPoints1.size();
 
-    const vector<Pt> vpMapPoints2 = pKF2->GetMapPointMatches();
+    const vector<Pt> vpMapPoints2 = pKF2->GetMapPointMatches(featType);
     const int N2 = vpMapPoints2.size();
 
     vector<bool> vbAlreadyMatched1(N1,false);
@@ -1151,7 +1080,7 @@ int FeatureMatcher::SearchBySim3(Keyframe pKF1, Keyframe pKF2, vector<Pt> &vpMat
         const float predictedSize = pMP->PredictSize(dist3D);
         const float radius = radiusScale * radiusTh * predictedSize;
 
-        const vector<size_t> vIndices = pKF2->GetFeaturesInArea(u,v,radius);
+        const vector<size_t> vIndices = pKF2->GetFeaturesInArea(u,v,radius, featType);
 
         if(vIndices.empty())
             continue;
@@ -1165,13 +1094,13 @@ int FeatureMatcher::SearchBySim3(Keyframe pKF1, Keyframe pKF2, vector<Pt> &vpMat
         {
             const size_t idx = *vit;
 
-            const cv::KeyPoint &kp = pKF2->mvKeysUn[idx];
+            const cv::KeyPoint &kp = pKF2->mvKeysUn.at(featType)[idx];
 
-            const float keyPtSize = pKF2->GetKeyPtSize(KeypointIndex (idx));
+            const float keyPtSize = pKF2->GetKeyPtSize(KeypointIndex (idx), featType);
             if((keyPtSize < predictedSize / pKF2->sizeTolerance) || (keyPtSize > predictedSize * pKF2->sizeTolerance))
                 continue;
 
-            const cv::Mat &descriptor = pKF2->mDescriptors.row(idx);
+            const cv::Mat &descriptor = pKF2->mDescriptors.at(featType).row(idx);
             const Descriptor_Distance_Type descDist = DescriptorDistance(refDescriptor,descriptor,pMP->descriptorType);
 
             if(descDist < bestDist)
@@ -1229,7 +1158,7 @@ int FeatureMatcher::SearchBySim3(Keyframe pKF1, Keyframe pKF2, vector<Pt> &vpMat
         const float predictedSize = pMP->PredictSize(dist3D);
         const float radius = radiusScale * radiusTh * predictedSize;
 
-        const vector<size_t> vIndices = pKF1->GetFeaturesInArea(u,v,radius);
+        const vector<size_t> vIndices = pKF1->GetFeaturesInArea(u,v,radius, featType);
 
         if(vIndices.empty())
             continue;
@@ -1243,13 +1172,13 @@ int FeatureMatcher::SearchBySim3(Keyframe pKF1, Keyframe pKF2, vector<Pt> &vpMat
         {
             const size_t idx = *vit;
 
-            const cv::KeyPoint &kp = pKF1->mvKeysUn[idx];
+            const cv::KeyPoint &kp = pKF1->mvKeysUn.at(featType)[idx];
 
-            const float keyPtSize = pKF1->GetKeyPtSize(KeypointIndex (idx));
+            const float keyPtSize = pKF1->GetKeyPtSize(KeypointIndex (idx), featType);
             if((keyPtSize < predictedSize / pKF1->sizeTolerance) || (keyPtSize > predictedSize * pKF1->sizeTolerance))
                 continue;
 
-            const cv::Mat &descriptor = pKF1->mDescriptors.row(idx);
+            const cv::Mat &descriptor = pKF1->mDescriptors.at(featType).row(idx);
             const Descriptor_Distance_Type descDist = DescriptorDistance(refDescriptor,descriptor,pMP->descriptorType);
 
             if(descDist < bestDist)
@@ -1288,7 +1217,7 @@ int FeatureMatcher::SearchBySim3(Keyframe pKF1, Keyframe pKF2, vector<Pt> &vpMat
 
 // SearchByProjection 3
 // TrackWithMotionModel
-int FeatureMatcher::SearchByProjection(Frame &CurrentFrame, const Frame &LastFrame, const float& radiusTh, const bool bMono)
+int FeatureMatcher::SearchByProjection(Frame &CurrentFrame, const Frame &LastFrame, const float& radiusTh, const bool bMono, const FeatureType& featType)
 {
 
     // Rotation Histogram (to check rotation consistency)
@@ -1309,14 +1238,14 @@ int FeatureMatcher::SearchByProjection(Frame &CurrentFrame, const Frame &LastFra
     const bool bForward = false;//tlc(2) > CurrentFrame.mb && !bMono;
     const bool bBackward = false;//-tlc(2) > CurrentFrame.mb && !bMono;
     int numPmP{0};
-    for(int i=0; i<LastFrame.N; i++)
+    for(int i=0; i<LastFrame.N.at(featType); i++)
     {
-        Pt pMP = LastFrame.pts[i];
+        Pt pMP = LastFrame.pts.at(featType)[i];
 
         if((pMP) && (!pMP->isBad()))
         {
             ++numPmP;
-            if(!LastFrame.mvbOutlier[i])
+            if(!LastFrame.mvbOutlier.at(featType)[i])
             {
                 // Project
                 vec3f x3Dw = pMP->GetWorldPos();
@@ -1338,17 +1267,17 @@ int FeatureMatcher::SearchByProjection(Frame &CurrentFrame, const Frame &LastFra
                     continue;
 
                 // Search in a window. Size depends on scale
-                float keyPtSize = LastFrame.GetKeyPtSize(i);
+                float keyPtSize = LastFrame.GetKeyPtSize(i, featType);
                 float radius = radiusScale * radiusTh * keyPtSize;
 
                 vector<size_t> vIndices2;
 
                 if(bForward)
-                    vIndices2 = CurrentFrame.GetFeaturesInArea(u,v, radius, (keyPtSize / CurrentFrame.sizeTolerance),CurrentFrame.maxKeyPtSize);
+                    vIndices2 = CurrentFrame.GetFeaturesInArea(u,v, radius, (keyPtSize / CurrentFrame.sizeTolerance),CurrentFrame.maxKeyPtSize, featType);
                 else if(bBackward)
-                    vIndices2 = CurrentFrame.GetFeaturesInArea(u,v, radius, 0.0, (keyPtSize * CurrentFrame.sizeTolerance));
+                    vIndices2 = CurrentFrame.GetFeaturesInArea(u,v, radius, 0.0, (keyPtSize * CurrentFrame.sizeTolerance), featType);
                 else
-                    vIndices2 = CurrentFrame.GetFeaturesInArea(u,v, radius, (keyPtSize / CurrentFrame.sizeTolerance),(keyPtSize * CurrentFrame.sizeTolerance));
+                    vIndices2 = CurrentFrame.GetFeaturesInArea(u,v, radius, (keyPtSize / CurrentFrame.sizeTolerance),(keyPtSize * CurrentFrame.sizeTolerance), featType);
 
                 if(vIndices2.empty())
                     continue;
@@ -1360,19 +1289,19 @@ int FeatureMatcher::SearchByProjection(Frame &CurrentFrame, const Frame &LastFra
                 for(vector<size_t>::const_iterator vit=vIndices2.begin(), vend=vIndices2.end(); vit!=vend; vit++)
                 {
                     const size_t i2 = *vit;
-                    if(CurrentFrame.pts[i2])
-                        if(CurrentFrame.pts[i2]->NumberOfObservations() > 0)
+                    if(CurrentFrame.pts.at(featType)[i2])
+                        if(CurrentFrame.pts.at(featType)[i2]->NumberOfObservations() > 0)
                             continue;
 
-                    if(CurrentFrame.mvuRight[i2]>0)
+                    if(CurrentFrame.mvuRight.at(featType)[i2]>0)
                     {
                         const float ur = u - CurrentFrame.mbf*invzc;
-                        const float er = fabs(ur - CurrentFrame.mvuRight[i2]);
+                        const float er = fabs(ur - CurrentFrame.mvuRight.at(featType)[i2]);
                         if(er>radius)
                             continue;
                     }
 
-                    const cv::Mat &descriptor = CurrentFrame.mDescriptors.row(i2);
+                    const cv::Mat &descriptor = CurrentFrame.mDescriptors.at(featType).row(i2);
                     const Descriptor_Distance_Type descDist = DescriptorDistance(refDescriptor,descriptor,pMP->descriptorType);
 
                     if(descDist < bestDist)
@@ -1384,11 +1313,11 @@ int FeatureMatcher::SearchByProjection(Frame &CurrentFrame, const Frame &LastFra
 
                 if(bestDist <= TH_HIGH)
                 {
-                    CurrentFrame.pts[bestIdx2] = pMP;
+                    CurrentFrame.pts.at(featType)[bestIdx2] = pMP;
                     nMatches++;
 
                     if(mbCheckOrientation)
-                        updateRotationHistogram(rotHist,bestIdx2,LastFrame.mvKeysUn[i],CurrentFrame.mvKeysUn[bestIdx2],rotFactor,HISTO_LENGTH);
+                        updateRotationHistogram(rotHist,bestIdx2,LastFrame.mvKeysUn.at(featType)[i],CurrentFrame.mvKeysUn.at(featType)[bestIdx2],rotFactor,HISTO_LENGTH);
                 }
             }
         }
@@ -1396,17 +1325,16 @@ int FeatureMatcher::SearchByProjection(Frame &CurrentFrame, const Frame &LastFra
 
     //Apply rotation consistency
     if(mbCheckOrientation)
-        filterMatchesWithOrientation(rotHist,CurrentFrame.pts,nMatches);
+        filterMatchesWithOrientation(rotHist,CurrentFrame.pts.at(featType),nMatches);
 
     return nMatches;
 }
 
 // SearchByProjection 4
 // Relocalization
-int FeatureMatcher::SearchByProjection(Frame &CurrentFrame, Keyframe pKF, const set<Pt> &sAlreadyFound, const float& radiusTh, const bool& useHighMatchingThreshold)
+int FeatureMatcher::SearchByProjection(Frame &CurrentFrame, Keyframe pKF, const set<Pt> &sAlreadyFound, const float& radiusTh,
+     const bool& useHighMatchingThreshold, const FeatureType& featType)
 {
-
-
     Descriptor_Distance_Type descDistanceTh = descDistTh_low_reloc;
     if(useHighMatchingThreshold)
         descDistanceTh = descDistTh_high_reloc;
@@ -1420,7 +1348,7 @@ int FeatureMatcher::SearchByProjection(Frame &CurrentFrame, Keyframe pKF, const 
     float rotFactor{};
     vector<vector<int>> rotHist = initRotationHistogram(rotFactor,HISTO_LENGTH);
 
-    const vector<Pt> vpMPs = pKF->GetMapPointMatches();
+    const vector<Pt> vpMPs = pKF->GetMapPointMatches(featType);
 
     for(size_t i=0, iend=vpMPs.size(); i<iend; i++)
     {
@@ -1462,7 +1390,9 @@ int FeatureMatcher::SearchByProjection(Frame &CurrentFrame, Keyframe pKF, const 
                 const float radius = radiusScale * radiusTh * predictedSize;
 
                 const vector<size_t> vIndices2 = CurrentFrame.GetFeaturesInArea(u, v, radius,
-                                                                                (predictedSize / CurrentFrame.sizeTolerance),(predictedSize * CurrentFrame.sizeTolerance));
+                                                                                (predictedSize / CurrentFrame.sizeTolerance),
+                                                                                (predictedSize * CurrentFrame.sizeTolerance), 
+                                                                                featType);
 
                 if(vIndices2.empty())
                     continue;
@@ -1474,10 +1404,10 @@ int FeatureMatcher::SearchByProjection(Frame &CurrentFrame, Keyframe pKF, const 
                 for(vector<size_t>::const_iterator vit=vIndices2.begin(); vit!=vIndices2.end(); vit++)
                 {
                     const size_t i2 = *vit;
-                    if(CurrentFrame.pts[i2])
+                    if(CurrentFrame.pts.at(featType)[i2])
                         continue;
 
-                    const cv::Mat &descriptor = CurrentFrame.mDescriptors.row(i2);
+                    const cv::Mat &descriptor = CurrentFrame.mDescriptors.at(featType).row(i2);
                     const Descriptor_Distance_Type descDist = DescriptorDistance(refDescriptor,descriptor,pMP->descriptorType);
 
                     if(descDist < bestDist)
@@ -1489,18 +1419,18 @@ int FeatureMatcher::SearchByProjection(Frame &CurrentFrame, Keyframe pKF, const 
 
                 if(bestDist <= descDistanceTh)
                 {
-                    CurrentFrame.pts[bestIdx2]=pMP;
+                    CurrentFrame.pts.at(featType)[bestIdx2]=pMP;
                     nMatches++;
 
                     if(mbCheckOrientation)
-                        updateRotationHistogram(rotHist,bestIdx2, pKF->mvKeysUn[i],CurrentFrame.mvKeysUn[bestIdx2],rotFactor,HISTO_LENGTH);
+                        updateRotationHistogram(rotHist,bestIdx2, pKF->mvKeysUn.at(featType)[i],CurrentFrame.mvKeysUn.at(featType)[bestIdx2],rotFactor,HISTO_LENGTH);
                 }
             }
         }
     }
 
     if(mbCheckOrientation)
-        filterMatchesWithOrientation(rotHist,CurrentFrame.pts,nMatches);
+        filterMatchesWithOrientation(rotHist,CurrentFrame.pts.at(featType),nMatches);
 
     return nMatches;
 }
