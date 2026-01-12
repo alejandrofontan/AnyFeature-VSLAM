@@ -70,7 +70,7 @@ FeatureMatcher::FeatureMatcher(float nnratio, bool checkOri): mfNNratio(nnratio)
 
 // SearchByProjection 1
 // TrackLocalMap
-int FeatureMatcher::SearchByProjection(Frame &F, const vector<Pt> &vpMapPoints, const float& radiusTh, const FeatureType& featType)
+int FeatureMatcher::SearchByProjection(Frame &F, const vector<Pt> &vpMapPoints, const float& radiusTh)
 {
     int nmatches=0;
 
@@ -86,6 +86,7 @@ int FeatureMatcher::SearchByProjection(Frame &F, const vector<Pt> &vpMapPoints, 
         if(pMP->isBad())
             continue;
 
+        const FeatureType featType = pMP->featureType;
         // The size of the window will depend on the viewing direction
         const float predictedSize = pMP->trackSize;
         float r = radiusScale * radiusTh *  RadiusByViewingCos(pMP->trackViewCos) * predictedSize;
@@ -586,135 +587,137 @@ int FeatureMatcher::SearchByBoW(Keyframe pKF1, Keyframe pKF2, vector<Pt > &vpMat
 }
 
 int FeatureMatcher::SearchForTriangulation(Keyframe pKF1, Keyframe pKF2, const mat3f& F12,
-                                           vector<pair<size_t, size_t> > &vMatchedPairs, const bool bOnlyStereo, 
+                                           vector<pair<size_t, size_t> > &vMatchedPairs, 
                                            const DescriptorType& descriptorType, const FeatureType& featType)
 {    
 
-    const DBoW2::FeatureVector &vFeatVec1 = pKF1->mFeatVec;
-    const DBoW2::FeatureVector &vFeatVec2 = pKF2->mFeatVec;
-
-    //Compute epipole in second image
-    vec3f Cw = pKF1->GetCameraCenter();
-    mat3f R2w = pKF2->GetRotation();
-    vec3f t2w = pKF2->GetTranslation();
-    vec3f C2 = R2w * Cw + t2w;
-    const float invz = 1.0f / C2(2);
-    const float ex = pKF2->fx * C2(0) * invz + pKF2->cx;
-    const float ey = pKF2->fy * C2(1) * invz + pKF2->cy;
-
-    // Find matches between not tracked keypoints
-    // Matching speed-up by ORB Vocabulary
-    // Compare only ORB that share the same node
-
-    vector<bool> vbMatched2(pKF2->N.at(featType),false);
-    vector<int> vMatches12(pKF1->N.at(featType),-1);
-
-    int nMatches{0};
-
-    DBoW2::FeatureVector::const_iterator f1it = vFeatVec1.begin();
-    DBoW2::FeatureVector::const_iterator f2it = vFeatVec2.begin();
-    DBoW2::FeatureVector::const_iterator f1end = vFeatVec1.end();
-    DBoW2::FeatureVector::const_iterator f2end = vFeatVec2.end();
-
-    while(f1it!=f1end && f2it!=f2end)
-    {
-        if(f1it->first == f2it->first)
-        {
-            for(size_t i1=0, iend1=f1it->second.size(); i1<iend1; i1++)
-            {
-                const size_t idx1 = f1it->second[i1];
-                
-                Pt pMP1 = pKF1->GetMapPoint(idx1, featType);
-                
-                // If there is already a MapPoint skip
-                if(pMP1)
-                    continue;
-
-                const bool bStereo1 = pKF1->mvuRight.at(featType)[idx1]>=0;
-
-                if(bOnlyStereo)
-                    if(!bStereo1)
-                        continue;
-                
-                const cv::KeyPoint &kp1 = pKF1->mvKeysUn.at(featType)[idx1];
-                
-                const cv::Mat &refDescriptor = pKF1->mDescriptors.at(featType).row(idx1);
-                Descriptor_Distance_Type bestDist{TH_LOW};
-                int bestIdx2{-1};
-                
-                for(size_t i2=0, iend2=f2it->second.size(); i2<iend2; i2++)
-                {
-                    size_t idx2 = f2it->second[i2];
-                    
-                    Pt pMP2 = pKF2->GetMapPoint(idx2, featType);
-                    
-                    // If we have already matched or there is a MapPoint skip
-                    if(vbMatched2[idx2] || pMP2)
-                        continue;
-
-                    const bool bStereo2 = pKF2->mvuRight.at(featType)[idx2]>=0;
-
-                    if(bOnlyStereo)
-                        if(!bStereo2)
-                            continue;
-                    
-                    const cv::Mat &descriptor = pKF2->mDescriptors.at(featType).row(idx2);
-                    const Descriptor_Distance_Type descDist = DescriptorDistance(refDescriptor,descriptor,descriptorType);
-
-                    if(descDist > TH_LOW || descDist > bestDist)
-                        continue;
-
-                    const cv::KeyPoint &kp2 = pKF2->mvKeysUn.at(featType)[idx2];
-
-                    if(!bStereo1 && !bStereo2)
-                    {
-                        const float distex = ex-kp2.pt.x;
-                        const float distey = ey-kp2.pt.y;
-
-                        if(distex*distex+distey*distey < 100.0f * sqrtf(pKF2->GetKeyPt1DSigma2(KeypointIndex(idx2), featType)))
-                            continue;
-                    }
-
-                    float sigma2_kp2 = pKF2->GetKeyPt1DSigma2(KeypointIndex(idx2), featType);
-                    if(CheckDistEpipolarLine(kp1,kp2,F12,pKF2,sigma2_kp2))
-                    {
-                        bestIdx2 = idx2;
-                        bestDist = descDist;
-                    }
-                }
-                
-                if(bestIdx2>=0)
-                {
-                    const cv::KeyPoint &kp2 = pKF2->mvKeysUn.at(featType)[bestIdx2];
-                    vMatches12[idx1] = bestIdx2;
-                    nMatches++;
-                }
-            }
-
-            f1it++;
-            f2it++;
-        }
-        else if(f1it->first < f2it->first)
-        {
-            f1it = vFeatVec1.lower_bound(f2it->first);
-        }
-        else
-        {
-            f2it = vFeatVec2.lower_bound(f1it->first);
-        }
-    }
-
+    std::vector<cv::DMatch> cvMatches;
+    cv::BFMatcher(cv::NORM_HAMMING, true).match(pKF1->mDescriptors.at(featType), pKF2->mDescriptors.at(featType), cvMatches);
     vMatchedPairs.clear();
-    vMatchedPairs.reserve(nMatches);
-
-    for(size_t i=0, iend=vMatches12.size(); i<iend; i++)
-    {
-        if(vMatches12[i]<0)
-            continue;
-        vMatchedPairs.push_back(make_pair(i,vMatches12[i]));
+    for(const auto& m : cvMatches) {
+        // Optional: Keep the triangulation logic check for MapPoints
+        if(!pKF1->GetMapPoint(m.queryIdx, featType) && !pKF2->GetMapPoint(m.trainIdx, featType)) {
+            vMatchedPairs.push_back({(size_t)m.queryIdx, (size_t)m.trainIdx});
+        }
     }
+    return vMatchedPairs.size();
 
-    return nMatches;
+    // const DBoW2::FeatureVector &vFeatVec1 = pKF1->mFeatVec;
+    // const DBoW2::FeatureVector &vFeatVec2 = pKF2->mFeatVec;
+
+    // //Compute epipole in second image
+    // vec3f Cw = pKF1->GetCameraCenter();
+    // mat3f R2w = pKF2->GetRotation();
+    // vec3f t2w = pKF2->GetTranslation();
+    // vec3f C2 = R2w * Cw + t2w;
+    // const float invz = 1.0f / C2(2);
+    // const float ex = pKF2->fx * C2(0) * invz + pKF2->cx;
+    // const float ey = pKF2->fy * C2(1) * invz + pKF2->cy;
+
+    // // Find matches between not tracked keypoints
+    // // Matching speed-up by ORB Vocabulary
+    // // Compare only ORB that share the same node
+
+    // vector<bool> vbMatched2(pKF2->N.at(featType),false);
+    // vector<int> vMatches12(pKF1->N.at(featType),-1);
+
+    // int nMatches{0};
+
+    // DBoW2::FeatureVector::const_iterator f1it = vFeatVec1.begin();
+    // DBoW2::FeatureVector::const_iterator f2it = vFeatVec2.begin();
+    // DBoW2::FeatureVector::const_iterator f1end = vFeatVec1.end();
+    // DBoW2::FeatureVector::const_iterator f2end = vFeatVec2.end();
+
+    // while(f1it!=f1end && f2it!=f2end)
+    // {
+    //     if(f1it->first == f2it->first)
+    //     {
+    //         for(size_t i1=0, iend1=f1it->second.size(); i1<iend1; i1++)
+    //         {
+    //             const size_t idx1 = f1it->second[i1];
+                
+    //             Pt pMP1 = pKF1->GetMapPoint(idx1, featType);
+                
+    //             // If there is already a MapPoint skip
+    //             if(pMP1)
+    //                 continue;
+
+    //             const bool bStereo1 = pKF1->mvuRight.at(featType)[idx1]>=0;
+    //             const cv::KeyPoint &kp1 = pKF1->mvKeysUn.at(featType)[idx1];
+                
+    //             const cv::Mat &refDescriptor = pKF1->mDescriptors.at(featType).row(idx1);
+    //             Descriptor_Distance_Type bestDist{TH_LOW};
+    //             int bestIdx2{-1};
+                
+    //             for(size_t i2=0, iend2=f2it->second.size(); i2<iend2; i2++)
+    //             {
+    //                 size_t idx2 = f2it->second[i2];
+                    
+    //                 Pt pMP2 = pKF2->GetMapPoint(idx2, featType);
+                    
+    //                 // If we have already matched or there is a MapPoint skip
+    //                 if(vbMatched2[idx2] || pMP2)
+    //                     continue;
+
+    //                 const bool bStereo2 = pKF2->mvuRight.at(featType)[idx2]>=0;
+
+    //                 const cv::Mat &descriptor = pKF2->mDescriptors.at(featType).row(idx2);
+    //                 const Descriptor_Distance_Type descDist = DescriptorDistance(refDescriptor,descriptor,descriptorType);
+
+    //                 if(descDist > TH_LOW || descDist > bestDist)
+    //                     continue;
+
+    //                 const cv::KeyPoint &kp2 = pKF2->mvKeysUn.at(featType)[idx2];
+
+    //                 if(!bStereo1 && !bStereo2)
+    //                 {
+    //                     const float distex = ex-kp2.pt.x;
+    //                     const float distey = ey-kp2.pt.y;
+
+    //                     if(distex*distex+distey*distey < 100.0f * sqrtf(pKF2->GetKeyPt1DSigma2(KeypointIndex(idx2), featType)))
+    //                         continue;
+    //                 }
+
+    //                 float sigma2_kp2 = pKF2->GetKeyPt1DSigma2(KeypointIndex(idx2), featType);
+    //                 if(CheckDistEpipolarLine(kp1,kp2,F12,pKF2,sigma2_kp2))
+    //                 {
+    //                     bestIdx2 = idx2;
+    //                     bestDist = descDist;
+    //                 }
+    //             }
+                
+    //             if(bestIdx2>=0)
+    //             {
+    //                 const cv::KeyPoint &kp2 = pKF2->mvKeysUn.at(featType)[bestIdx2];
+    //                 vMatches12[idx1] = bestIdx2;
+    //                 nMatches++;
+    //             }
+    //         }
+
+    //         f1it++;
+    //         f2it++;
+    //     }
+    //     else if(f1it->first < f2it->first)
+    //     {
+    //         f1it = vFeatVec1.lower_bound(f2it->first);
+    //     }
+    //     else
+    //     {
+    //         f2it = vFeatVec2.lower_bound(f1it->first);
+    //     }
+    // }
+
+    // vMatchedPairs.clear();
+    // vMatchedPairs.reserve(nMatches);
+
+    // for(size_t i=0, iend=vMatches12.size(); i<iend; i++)
+    // {
+    //     if(vMatches12[i]<0)
+    //         continue;
+    //     vMatchedPairs.push_back(make_pair(i,vMatches12[i]));
+    // }
+
+    // return nMatches;
 }
 
 // Fuse 1

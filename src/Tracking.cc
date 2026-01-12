@@ -76,7 +76,6 @@ Tracking::Tracking(System *pSys, shared_ptr<Vocabulary> vocabulary,
 
     // Load feature parameters from settings yaml file
     for (auto& ft: featureTypes){
-        std::cout << " -------- Feature extractor for tracking: " << ft << std::endl;
         featureExtractorLeft[ft] = Tracking::getFeatureExtractor(1, std::string(feature_settings_yaml_file.at(ft)), featureTypes[ft]);
     }
     //if(sensor==System::STEREO)
@@ -157,8 +156,8 @@ mat4f Tracking::GrabImageMonocular(Image &im, const double &timestamp)
 }
 
 void Tracking::Track()
-{   
-    std::cout << "------- Track() -------" << std::endl;
+{       
+    std::cout << "Tracking::Track: mState = " << mState << std::endl;
     if(mState==NO_IMAGES_YET)
     {
         mState = NOT_INITIALIZED;
@@ -195,27 +194,24 @@ void Tracking::Track()
             if(mState==OK)
             {
                 // Local Mapping might have changed some MapPoints tracked in last frame
-                std::cout << "CheckReplacedInLastFrame" << std::endl;
                 CheckReplacedInLastFrame();
 
                 if((mVelocity(3,3) != 1.0f) || currentFrame.mnId<lastRelocFrameId+2)
                 {   
-                    std::cout << "TrackReferenceKeyFrame" << std::endl;
+                    std::cout << "TrackReferenceKeyFrame" << mState << std::endl;
                     bOK = TrackReferenceKeyFrame();
                 }
                 else
                 {
-                    std::cout << "TrackWithMotionModel" << std::endl;
+                    std::cout << "TrackWithMotionModel " << mState << std::endl;
                     bOK = TrackWithMotionModel();
-
+                    std::cout << "TrackReferenceKeyFrame 2 " << mState << std::endl;
                     if(!bOK)
                         bOK = TrackReferenceKeyFrame();
-                    std::cout << "TrackReferenceKeyFrame 2" << std::endl;
                 }
             }
             else
             {   
-                std::cout << "mState!=OK" << std::endl;
                 bOK = Relocalization(featureTypes[featureRelocalization]);
             }
         }
@@ -292,13 +288,12 @@ void Tracking::Track()
                 }
             }
         }
-        std::cout << "Ref Point 1" << std::endl;
+        std::cout << "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa " << mState << std::endl;
         currentFrame.refKeyframe = refKeyframe;
 
         // If we have an initial estimation of the camera pose and matching. Track the local map.
         if(!onlyTracking)
         {   
-            std::cout << "Ref Point 2" << std::endl;
             if(bOK)
                 bOK = TrackLocalMap();
         }
@@ -310,7 +305,6 @@ void Tracking::Track()
             if(bOK && !mbVO)
                 bOK = TrackLocalMap();
         }
-        std::cout << "Ref Point 3" << std::endl;
         if(bOK)
             mState = OK;
         else
@@ -462,11 +456,9 @@ void Tracking::MonocularInitialization(const FeatureType& featureType)
     const DescriptorType descriptorType = GetDescriptorType(featureType);
     if(!mpInitializer)
     {   
-        std::cout << "!mpInitializer" << std::endl;
         // Set Reference Frame
         if(currentFrame.mvKeys[featureType].size() > minKeypointsMonocular)
         {
-             std::cout << "!mpInitializer" << std::endl;
             mInitialFrame = Frame(currentFrame);
             lastFrame = Frame(currentFrame);
             mvbPrevMatched.resize(currentFrame.mvKeysUn[featureType].size());
@@ -475,10 +467,8 @@ void Tracking::MonocularInitialization(const FeatureType& featureType)
 
             mpInitializer =  make_shared<Initializer>(currentFrame, sigmaInitializer, numItInitializer, featureType);
             fill(mvIniMatches.begin(),mvIniMatches.end(),-1);
-            std::cout << "!mpInitializer" << std::endl;
             return;
         }
-        std::cout << "!mpInitializer" << std::endl;
     }
     else
     {
@@ -638,8 +628,8 @@ void Tracking::CheckReplacedInLastFrame()
 
 
 bool Tracking::TrackReferenceKeyFrame()
-{
-    std::cout << "TrackReferenceKeyFrame 1" << std::endl;
+{   
+    std::cout << "Tracking::TrackReferenceKeyFrame" << std::endl;
     FeatureType featureType = featureTypes[featureTrackRefKey];
 
     // Compute Bag of Words vector
@@ -649,18 +639,14 @@ bool Tracking::TrackReferenceKeyFrame()
     // If enough matches are found we set up a PnP solver
     FeatureMatcher matcher(nnratio_trackRefKey, true);
     vector<Pt> vpMapPointMatches;
-    std::cout << "TrackReferenceKeyFrame 2" << std::endl;
     int nmatches = matcher.SearchByBoW(refKeyframe,currentFrame,vpMapPointMatches, featureType);
-    std::cout << "TrackReferenceKeyFrame 3" << std::endl;
     if(nmatches < minMatches_trackRefKey_high)
         return false;
-    std::cout << "TrackReferenceKeyFrame 3.1" << std::endl;
     currentFrame.pts[featureType] = vpMapPointMatches;
     currentFrame.SetPose(lastFrame.Tcw);
-    std::cout << "TrackReferenceKeyFrame 3.2" << std::endl;
 
     Optimizer::PoseOptimization(&currentFrame);
-    std::cout << "TrackReferenceKeyFrame 3.3" << std::endl;
+
     // Discard outliers
     int nmatchesMap = 0;
     for(int i =0; i<currentFrame.N.at(featureType); i++)
@@ -681,7 +667,6 @@ bool Tracking::TrackReferenceKeyFrame()
                 nmatchesMap++;
         }
     }
-    std::cout << "TrackReferenceKeyFrame 4" << std::endl;
     return nmatchesMap >= minMatches_trackRefKey_low;
 }
 
@@ -755,6 +740,7 @@ void Tracking::UpdateLastFrame()
 
 bool Tracking::TrackWithMotionModel()
 {
+    std::cout << "Tracking::TrackWithMotionModel" << std::endl;
     FeatureType featureType = featureTypes[featureTrackWithMotionModel];
 
     FeatureMatcher matcher(nnratio_trackMotModel, true);
@@ -822,17 +808,18 @@ bool Tracking::TrackWithMotionModel()
 
 bool Tracking::TrackLocalMap()
 {
+    std::cout << "Tracking::TrackLocalMap" << std::endl;
+
     // We have an estimation of the camera pose and some map points tracked in the frame.
     // We retrieve the local map and try to find matches to points in the local map.
-    std::cout << "TrackLocalMap 1" << std::endl;
     UpdateLocalMap();
-    std::cout << "TrackLocalMap 2" << std::endl;
+    std::cout << "Tracking::UpdateLocalMap" << std::endl;
     SearchLocalPoints();
-    std::cout << "TrackLocalMap 3" << std::endl;
+    std::cout << "Tracking::SearchLocalPoints" << std::endl;
     // Optimize Pose
     Optimizer::PoseOptimization(&currentFrame);
+    std::cout << "Tracking::PoseOptimization" << std::endl;
     mnMatchesInliers = 0;
-    std::cout << "TrackLocalMap 4" << std::endl;
     // Update MapPoints Statistics
     for (auto& [ft, pts] : currentFrame.pts) {
         for(int i = 0; i < pts.size(); i++)
@@ -856,7 +843,6 @@ bool Tracking::TrackLocalMap()
             }
         }
     }
-    std::cout << "TrackLocalMap 5" << std::endl;
     // Decide if the tracking was succesful
     // More restrictive if there was a relocalization recently
     if(currentFrame.mnId < lastRelocFrameId + maxFrames && mnMatchesInliers < minMatches_trackLocalMap_high)
@@ -1021,7 +1007,8 @@ bool Tracking::TrackLocalMap()
     }
 
     void Tracking::SearchLocalPoints()
-    {
+    {   
+        std::cout << "Tracking::SearchLocalPoints 1" << std::endl;
         // Do not search map points already matched
         for(auto& pt: currentFrame.pts.at(featureTypes[featureSearchLocalPoints])){
             if(pt && !pt->isBad()){
@@ -1032,7 +1019,7 @@ bool Tracking::TrackLocalMap()
             else
                 pt = nullptr;
         }
-
+        std::cout << "Tracking::SearchLocalPoints 2" << std::endl;
         // Project points in frame and check its visibility
         int nToMatch=0;
         for(auto& pt: localPts){
@@ -1047,7 +1034,7 @@ bool Tracking::TrackLocalMap()
                 nToMatch++;
             }
         }
-
+        std::cout << "Tracking::SearchLocalPoints 3" << std::endl;
         if(nToMatch > 0){
             FeatureMatcher matcher(nnratio_slp);
             float radiusTh = radiusTh_low_slp;
@@ -1058,22 +1045,18 @@ bool Tracking::TrackLocalMap()
             if(currentFrame.mnId < lastRelocFrameId + idSum)
                 radiusTh = radiusTh_high_slp;
 
-            matcher.SearchByProjection(currentFrame,localPts, radiusTh, featureTypes[featureSearchLocalPoints]);
+            matcher.SearchByProjection(currentFrame,localPts, radiusTh);
         }
+        std::cout << "Tracking::SearchLocalPoints 4" << std::endl;
     }
 
     void Tracking::UpdateLocalMap()
     {
-        std::cout << "UpdateLocalMap 1" << std::endl;
         // This is for visualization
         map->SetReferenceMapPoints(localPts);
-        std::cout << "UpdateLocalMap 2" << std::endl;
         // Update
-        std::cout << "UpdateLocalMap 3" << std::endl;
         UpdateLocalKeyFrames();
-        std::cout << "UpdateLocalMap 4" << std::endl;
         UpdateLocalPoints();
-        std::cout << "UpdateLocalMap 5" << std::endl;
     }
 
     void Tracking::UpdateLocalPoints()

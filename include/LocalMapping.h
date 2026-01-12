@@ -132,10 +132,13 @@ protected:
     const int minNumObservations{3};
     const float minDistance{0.05f};
 
-   /* map<KeyframeId,set<KeyframeId>> keyframes_to_positions; // <Keyframe Id , Position Ids>
-    map<KeyframeId,set<KeyframeId>> positions_to_keyframes; // <Position Id , Keyframe Ids>
-    map<KeyframeId,vec3f> trajectoryXYZ; // <Keyframe Id , Position Ids>
-    */
+
+    const int CREATE_NEW_MAP_POINTS_BEST_COVISIBILITY_KEYFRAMES_MONOCULAR{20};
+    const int CREATE_NEW_MAP_POINTS_BEST_COVISIBILITY_KEYFRAMES{10};
+    const float CREATE_NEW_MAP_POINTS_DIST_RATIO{0.6f};
+    const float CREATE_NEW_MAP_POINTS_RATIO_FACTOR{1.5f};
+    const float CREATE_NEW_MAP_POINTS_RATIO_BASELINE_DEPTH{0.01f};
+
 };
 
 } //namespace ORB_SLAM

@@ -44,7 +44,7 @@ public:
 
     // Search matches between Frame keypoints and projected MapPoints. Returns number of matches
     // Used to track the local map (Tracking)
-    int SearchByProjection(Frame &F, const std::vector<Pt> &vpMapPoints, const float& radiusTh, const FeatureType& featureType);
+    int SearchByProjection(Frame &F, const std::vector<Pt> &vpMapPoints, const float& radiusTh);
 
     // Project MapPoints tracked in last frame into the current frame and search matches.
     // Used to track from previous frame (Tracking)
@@ -69,7 +69,7 @@ public:
 
     // Matching to triangulate new MapPoints. Check Epipolar Constraint.
     int SearchForTriangulation(Keyframe pKF1, Keyframe pKF2, const mat3f& F12,
-                               std::vector<pair<size_t, size_t> > &vMatchedPairs, const bool bOnlyStereo, const DescriptorType& descriptorType, const FeatureType& featureType);
+                               std::vector<pair<size_t, size_t> > &vMatchedPairs, const DescriptorType& descriptorType, const FeatureType& featureType);
 
     // Search matches between MapPoints seen in KF1 and KF2 transforming by a Sim3 [s12*R12|t12]
     // In the stereo and RGB-D case, s12=1

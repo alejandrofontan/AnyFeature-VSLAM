@@ -75,14 +75,13 @@ void MapDrawer::DrawMapPoints()
 
     glPointSize(mPointSize);
     glBegin(GL_POINTS);
-    cv::Scalar color = getFeatureColor(featureTypes[0],0);
-    glColor3f(GLfloat(color[0]),GLfloat(color[1]),GLfloat(color[2]));
-
     for(set<Pt>::iterator sit=spRefMPs.begin(), send=spRefMPs.end(); sit!=send; sit++)
     {
         if((*sit)->isBad())
             continue;
         vec3f pos = (*sit)->GetWorldPos();
+        cv::Scalar color = getFeatureColor((*sit)->featureType,0);
+        glColor3f(GLfloat(color[0]),GLfloat(color[1]),GLfloat(color[2]));
         glVertex3f(pos(0),pos(1),pos(2));
 
     }

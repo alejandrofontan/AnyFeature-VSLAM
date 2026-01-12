@@ -763,4 +763,25 @@ float KeyFrame::ComputeSceneMedianDepth(const int q)
         return sqrtf(GetKeyPt1DSigma2(keyPtIdx, featType));
     }
 
+    void KeyFrame::getFullIntrinsics(float &fx_, float &fy_, float &cx_, float &cy_, float& invfx_, float& invfy_) const
+    {
+        fx_ = fx;
+        fy_ = fy;
+        cx_ = cx;
+        cy_ = cy;
+        invfx_ = invfx;
+        invfy_ = invfy;
+    }
+
+    void KeyFrame::getFullPose(mat4f &Twc_, mat3f &Rwc_, vec3f &twc_, mat4f &Tcw_, mat3f &Rcw_, vec3f &tcw_)
+    {
+        unique_lock<mutex> lock(mMutexPose);
+        Twc_ = Twc;
+        Rwc_ = Twc.block<3,3>(0,0);
+        twc_ = twc;
+        Tcw_ = Tcw;
+        Rcw_ = Tcw.block<3,3>(0,0);
+        tcw_ = Tcw.block<3,1>(0,3);
+    }
+
 } //namespace ORB_SLAM

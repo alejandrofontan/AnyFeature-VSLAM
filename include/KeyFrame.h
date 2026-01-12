@@ -61,6 +61,8 @@ public:
     vec4f GetStereoCenter();
     mat3f GetRotation();
     vec3f GetTranslation();
+    void getFullIntrinsics(float &fx, float &fy, float &cx, float &cy, float& invfx, float& invfy) const;
+    void getFullPose(mat4f &Twc_, mat3f &Rwc_, vec3f &twc_, mat4f &Tcw_, mat3f &Rcw_, vec3f &tcw_);
 
     // Bag of Words Representation
     void ComputeBoW(const FeatureType &featType);

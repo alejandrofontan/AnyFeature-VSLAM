@@ -10,7 +10,6 @@ ANYFEATURE_VSLAM::FeatureExtractor_akaze61::FeatureExtractor_akaze61(const int &
     akazeOptions.omax = settings->GetDetectorNominalNumOctaves() / 4;
     akazeOptions.nsublevels = settings->GetDetectorNominalNumOctaves() / 2;
     akazeOptions.dthreshold = float(settings->detectTh);
-    std::cout << "FeatureExtractor_akaze61 = " << settings->detectTh << std::endl;
 }
 
 void ANYFEATURE_VSLAM::FeatureExtractor_akaze61::detectAndCompute(const Image& img, std::vector<cv::KeyPoint>& keypoints, cv::Mat& descriptors){
@@ -39,8 +38,6 @@ void ANYFEATURE_VSLAM::FeatureExtractor_akaze61::detectKeypoints(
 
     std::vector<cv::KeyPoint> keypoints{};
     evolution->Feature_Detection(keypoints);
-    std::cout << "keypoints.size()      -------------------------------------------------" << keypoints.size() << std::endl;
-    std::cout << "detectTh      -------------------------------------------------" << detectTh << std::endl;
 
     for(auto& keyPt: keypoints)
         keypoints_level[GetKeypointOctave(keyPt)].push_back(keyPt);
