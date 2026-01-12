@@ -57,10 +57,11 @@ public:
     // Project MapPoints using a Similarity Transformation and search matches.
     // Used in loop detection (Loop Closing)
      int SearchByProjection(Keyframe pKF, const mat4f& Scw, const std::vector<Pt> &vpPoints, std::vector<Pt> &vpMatched, const float& radiusTh, const FeatureType& featureType);
+     
     // Search matches between MapPoints in a KeyFrame and ORB in a Frame.
     // Brute force constrained to ORB that belong to the same vocabulary node (at a certain level)
     // Used in Relocalisation and Loop Detection
-    int SearchByBoW(Keyframe pKF, Frame &F, std::vector<Pt> &vpMapPointMatches, const FeatureType& featureType);
+    int SearchByBoW(const Keyframe& keyframe, const Frame &frame, vector<Pt>& mapPointMatches, const FeatureType& featType);
     int SearchByBoW(Keyframe pKF1, Keyframe pKF2, std::vector<Pt> &vpMatches12, const FeatureType& featureType);
 
     // Matching for the Map Initialization (only used in the monocular case)

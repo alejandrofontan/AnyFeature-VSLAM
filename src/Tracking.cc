@@ -157,7 +157,6 @@ mat4f Tracking::GrabImageMonocular(Image &im, const double &timestamp)
 
 void Tracking::Track()
 {       
-    std::cout << "Tracking::Track: mState = " << mState << std::endl;
     if(mState==NO_IMAGES_YET)
     {
         mState = NOT_INITIALIZED;
@@ -198,14 +197,11 @@ void Tracking::Track()
 
                 if((mVelocity(3,3) != 1.0f) || currentFrame.mnId<lastRelocFrameId+2)
                 {   
-                    std::cout << "TrackReferenceKeyFrame" << mState << std::endl;
                     bOK = TrackReferenceKeyFrame();
                 }
                 else
                 {
-                    std::cout << "TrackWithMotionModel " << mState << std::endl;
                     bOK = TrackWithMotionModel();
-                    std::cout << "TrackReferenceKeyFrame 2 " << mState << std::endl;
                     if(!bOK)
                         bOK = TrackReferenceKeyFrame();
                 }
@@ -288,7 +284,7 @@ void Tracking::Track()
                 }
             }
         }
-        std::cout << "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa " << mState << std::endl;
+
         currentFrame.refKeyframe = refKeyframe;
 
         // If we have an initial estimation of the camera pose and matching. Track the local map.
@@ -608,7 +604,7 @@ void Tracking::CreateInitialMapMonocular(const FeatureType& featureType)
 }
 
 void Tracking::CheckReplacedInLastFrame()
-{
+{   
     for (auto& [ft, pts] : lastFrame.pts) {
         for(int i = 0; i<lastFrame.N.at(ft); i++)
         {
@@ -629,42 +625,52 @@ void Tracking::CheckReplacedInLastFrame()
 
 bool Tracking::TrackReferenceKeyFrame()
 {   
-    std::cout << "Tracking::TrackReferenceKeyFrame" << std::endl;
     FeatureType featureType = featureTypes[featureTrackRefKey];
 
     // Compute Bag of Words vector
-    currentFrame.ComputeBoW(featureType);
+    currentFrame.ComputeBoW(featureTypes[featureTrackRefKey]);
 
     // We perform first an ORB matching with the reference keyframe
     // If enough matches are found we set up a PnP solver
     FeatureMatcher matcher(nnratio_trackRefKey, true);
     vector<Pt> vpMapPointMatches;
-    int nmatches = matcher.SearchByBoW(refKeyframe,currentFrame,vpMapPointMatches, featureType);
-    if(nmatches < minMatches_trackRefKey_high)
-        return false;
-    currentFrame.pts[featureType] = vpMapPointMatches;
-    currentFrame.SetPose(lastFrame.Tcw);
 
+    int nmatches{0};
+    for (auto& [ft, N] : currentFrame.N) {
+        int nmatches_ft = matcher.SearchByBoW(refKeyframe, currentFrame, vpMapPointMatches, ft);
+        if (nmatches_ft == 0)
+            continue;
+        currentFrame.pts[ft] = vpMapPointMatches;   
+        currentFrame.N[ft] = static_cast<int>(vpMapPointMatches.size());
+        currentFrame.mvbOutlier[ft] = vector<bool>(vpMapPointMatches.size(), false);
+        nmatches += nmatches_ft;   
+    }
+    if(nmatches < minMatches_trackRefKey_high)
+            return false;
+         
+    currentFrame.SetPose(lastFrame.Tcw);
     Optimizer::PoseOptimization(&currentFrame);
 
     // Discard outliers
     int nmatchesMap = 0;
-    for(int i =0; i<currentFrame.N.at(featureType); i++)
-    {
-        if(currentFrame.pts.at(featureType)[i])
+    for (auto& [ft, N] : currentFrame.N) {
+        for(int i =0; i<currentFrame.N.at(ft); i++)
         {
-            if(currentFrame.mvbOutlier.at(featureType)[i])
+            if(currentFrame.pts.at(ft)[i])
             {
-                Pt pMP = currentFrame.pts.at(featureType)[i];
+                if(currentFrame.mvbOutlier.at(ft)[i])
+                {
+                    Pt pMP = currentFrame.pts.at(ft)[i];
 
-                currentFrame.pts.at(featureType)[i]=static_cast<Pt>(nullptr);
-                currentFrame.mvbOutlier.at(featureType)[i]=false;
-                pMP->mbTrackInView = false;
-                pMP->idLastFrameSeen = currentFrame.mnId;
-                nmatches--;
+                    currentFrame.pts.at(ft)[i]=static_cast<Pt>(nullptr);
+                    currentFrame.mvbOutlier.at(ft)[i]=false;
+                    pMP->mbTrackInView = false;
+                    pMP->idLastFrameSeen = currentFrame.mnId;
+                    nmatches--;
+                }
+                else if(currentFrame.pts.at(ft)[i]->NumberOfObservations() > 0)
+                    nmatchesMap++;
             }
-            else if(currentFrame.pts.at(featureType)[i]->NumberOfObservations() > 0)
-                nmatchesMap++;
         }
     }
     return nmatchesMap >= minMatches_trackRefKey_low;
@@ -740,7 +746,6 @@ void Tracking::UpdateLastFrame()
 
 bool Tracking::TrackWithMotionModel()
 {
-    std::cout << "Tracking::TrackWithMotionModel" << std::endl;
     FeatureType featureType = featureTypes[featureTrackWithMotionModel];
 
     FeatureMatcher matcher(nnratio_trackMotModel, true);
@@ -751,7 +756,9 @@ bool Tracking::TrackWithMotionModel()
 
     currentFrame.SetPose(mVelocity * lastFrame.Tcw);
 
-    fill(currentFrame.pts.at(featureType).begin(),currentFrame.pts.at(featureType).end(),static_cast<Pt>(nullptr));
+    for (auto& [ft, N] : currentFrame.N) {
+        fill(currentFrame.pts.at(ft).begin(),currentFrame.pts.at(ft).end(),static_cast<Pt>(nullptr));
+    }
 
     // Project points seen in previous frame
     float radiusTh;
@@ -759,8 +766,13 @@ bool Tracking::TrackWithMotionModel()
         radiusTh = radiusTh_high_trackMotModel;
     else
         radiusTh = radiusTh_low_trackMotModel;
-    int nmatches = matcher.SearchByProjection(currentFrame,lastFrame,radiusTh,
-        mSensor==System::MONOCULAR, featureType);
+    
+    int nmatches{0};
+    for (auto& [ft, N] : currentFrame.N) {
+        int nmatches_ft = matcher.SearchByProjection(currentFrame,lastFrame,radiusTh,
+            mSensor==System::MONOCULAR, ft);
+        nmatches += nmatches_ft;
+    }
 
     // If few matches, uses a wider window search
     if(nmatches < minMatches_trackMotModel_high)
@@ -778,25 +790,27 @@ bool Tracking::TrackWithMotionModel()
 
     // Discard outliers
     int nmatchesMap = 0;
-    for(int i =0; i<currentFrame.N.at(featureType); i++)
-    {
-        if(currentFrame.pts.at(featureType)[i])
+    for (auto& [ft, N] : currentFrame.N) {
+        for(int i =0; i<currentFrame.N.at(ft); i++)
         {
-            if(currentFrame.mvbOutlier.at(featureType)[i])
+            if(currentFrame.pts.at(ft)[i])
             {
-                Pt pMP = currentFrame.pts.at(featureType)[i];
+                if(currentFrame.mvbOutlier.at(ft)[i])
+                {
+                    Pt pMP = currentFrame.pts.at(ft)[i];
 
-                currentFrame.pts.at(featureType)[i]=static_cast<Pt>(nullptr);
-                currentFrame.mvbOutlier.at(featureType)[i]=false;
-                pMP->mbTrackInView = false;
-                pMP->idLastFrameSeen = currentFrame.mnId;
-                nmatches--;
+                    currentFrame.pts.at(ft)[i]=static_cast<Pt>(nullptr);
+                    currentFrame.mvbOutlier.at(ft)[i]=false;
+                    pMP->mbTrackInView = false;
+                    pMP->idLastFrameSeen = currentFrame.mnId;
+                    nmatches--;
+                }
+                else if(currentFrame.pts.at(ft)[i]->NumberOfObservations() > 0)
+                    nmatchesMap++;
             }
-            else if(currentFrame.pts.at(featureType)[i]->NumberOfObservations() > 0)
-                nmatchesMap++;
-        }
-    }    
-
+        }    
+    }
+    
     if(onlyTracking)
     {
         mbVO = nmatchesMap < minMatches_trackMotModel_low;
@@ -808,18 +822,16 @@ bool Tracking::TrackWithMotionModel()
 
 bool Tracking::TrackLocalMap()
 {
-    std::cout << "Tracking::TrackLocalMap" << std::endl;
 
     // We have an estimation of the camera pose and some map points tracked in the frame.
     // We retrieve the local map and try to find matches to points in the local map.
     UpdateLocalMap();
-    std::cout << "Tracking::UpdateLocalMap" << std::endl;
     SearchLocalPoints();
-    std::cout << "Tracking::SearchLocalPoints" << std::endl;
+
     // Optimize Pose
     Optimizer::PoseOptimization(&currentFrame);
-    std::cout << "Tracking::PoseOptimization" << std::endl;
     mnMatchesInliers = 0;
+
     // Update MapPoints Statistics
     for (auto& [ft, pts] : currentFrame.pts) {
         for(int i = 0; i < pts.size(); i++)
@@ -1008,7 +1020,6 @@ bool Tracking::TrackLocalMap()
 
     void Tracking::SearchLocalPoints()
     {   
-        std::cout << "Tracking::SearchLocalPoints 1" << std::endl;
         // Do not search map points already matched
         for(auto& pt: currentFrame.pts.at(featureTypes[featureSearchLocalPoints])){
             if(pt && !pt->isBad()){
@@ -1019,7 +1030,7 @@ bool Tracking::TrackLocalMap()
             else
                 pt = nullptr;
         }
-        std::cout << "Tracking::SearchLocalPoints 2" << std::endl;
+
         // Project points in frame and check its visibility
         int nToMatch=0;
         for(auto& pt: localPts){
@@ -1034,7 +1045,7 @@ bool Tracking::TrackLocalMap()
                 nToMatch++;
             }
         }
-        std::cout << "Tracking::SearchLocalPoints 3" << std::endl;
+
         if(nToMatch > 0){
             FeatureMatcher matcher(nnratio_slp);
             float radiusTh = radiusTh_low_slp;
@@ -1047,7 +1058,6 @@ bool Tracking::TrackLocalMap()
 
             matcher.SearchByProjection(currentFrame,localPts, radiusTh);
         }
-        std::cout << "Tracking::SearchLocalPoints 4" << std::endl;
     }
 
     void Tracking::UpdateLocalMap()

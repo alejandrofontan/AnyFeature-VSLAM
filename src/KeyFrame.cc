@@ -329,8 +329,7 @@ vector<Pt> KeyFrame::GetMapPointMatches(const FeatureType& featType)
 
 Pt KeyFrame::GetMapPoint(const size_t &idx, const FeatureType& featType)
 {
-    unique_lock<mutex> lock(mMutexFeatures);
-    return mvpMapPoints.at(featType).at(idx);
+    return mvpMapPoints.at(featType)[idx];
 }
 
 void KeyFrame::UpdateConnections()

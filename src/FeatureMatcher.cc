@@ -184,103 +184,124 @@ bool FeatureMatcher::CheckDistEpipolarLine(const cv::KeyPoint &kp1, const cv::Ke
 
 // SearchByBoW 1
 // TrackReferenceKeyframe & Relocalization
-int FeatureMatcher::SearchByBoW(Keyframe pKF, Frame &F, vector<Pt> &vpMapPointMatches, const FeatureType& featType)
+int FeatureMatcher::SearchByBoW(const Keyframe& keyframe, const Frame &frame, vector<Pt>& mapPointMatches, const FeatureType& featType)
 {
-    const vector<Pt> vpMapPointsKF = pKF->GetMapPointMatches(featType);
+    mapPointMatches.clear();
 
-    vpMapPointMatches = vector<Pt>(F.N.at(featType),static_cast<Pt>(NULL));
+    // Ensure both frames contain the requested feature type
+    auto it1 = keyframe->mDescriptors.find(featType);
+    auto it2 = frame.mDescriptors.find(featType);
+    if (it1 == keyframe->mDescriptors.end() || it2 == frame.mDescriptors.end()) 
+        return 0; 
+    
+    std::vector<cv::DMatch> matches;
+    cv::BFMatcher(cv::NORM_HAMMING, true).match(keyframe->mDescriptors.at(featType), frame.mDescriptors.at(featType), matches);
 
-    const DBoW2::FeatureVector &vFeatVecKF = pKF->mFeatVec;
-
-    // Rotation Histogram (to check rotation consistency)
-    int nMatches{0};
-    float rotFactor{};
-    vector<vector<int>> rotHist = initRotationHistogram(rotFactor,HISTO_LENGTH);
-
-    // We perform the matching over ORB that belong to the same vocabulary node (at a certain level)
-    DBoW2::FeatureVector::const_iterator KFit = vFeatVecKF.begin();
-    DBoW2::FeatureVector::const_iterator Fit = F.mFeatVec.begin();
-    DBoW2::FeatureVector::const_iterator KFend = vFeatVecKF.end();
-    DBoW2::FeatureVector::const_iterator Fend = F.mFeatVec.end();
-
-    while(KFit != KFend && Fit != Fend)
-    {
-        if(KFit->first == Fit->first)
-        {
-            const vector<unsigned int> vIndicesKF = KFit->second;
-            const vector<unsigned int> vIndicesF = Fit->second;
-
-            for(size_t iKF=0; iKF<vIndicesKF.size(); iKF++)
-            {
-                const unsigned int realIdxKF = vIndicesKF[iKF];
-
-                Pt pMP = vpMapPointsKF[realIdxKF];
-
-                if(!pMP)
-                    continue;
-
-                if(pMP->isBad())
-                    continue;                
-
-                const cv::Mat &refDescriptor= pKF->mDescriptors.at(featType).row(realIdxKF);
-                Descriptor_Distance_Type bestDist1{highestPossibleDistance},bestDist2{highestPossibleDistance};
-                int bestIdxF{-1} ;
-
-                for(size_t iF=0; iF<vIndicesF.size(); iF++)
-                {
-                    const unsigned int realIdxF = vIndicesF[iF];
-
-                    if(vpMapPointMatches[realIdxF])
-                        continue;
-
-                    const cv::Mat &descriptor = F.mDescriptors.at(featType).row(realIdxF);
-                    const Descriptor_Distance_Type descDist =  DescriptorDistance(refDescriptor,descriptor,pMP->descriptorType);
-
-                    if(descDist < bestDist1)
-                    {
-                        bestDist2 = bestDist1;
-                        bestDist1 = descDist;
-                        bestIdxF = realIdxF;
-                    }
-                    else if(descDist < bestDist2)
-                    {
-                        bestDist2 = descDist;
-                    }
-                }
-
-                if(bestDist1 <= TH_LOW)
-                {
-                    if(static_cast<float>(bestDist1) < mfNNratio * static_cast<float>(bestDist2))
-                    {
-                        vpMapPointMatches[bestIdxF]=pMP;
-
-                        const cv::KeyPoint &kp = pKF->mvKeysUn.at(featType)[realIdxKF];
-                        nMatches++;
-                        if(mbCheckOrientation)
-                            updateRotationHistogram(rotHist,bestIdxF,kp,F.mvKeys.at(featType)[bestIdxF],rotFactor,HISTO_LENGTH);
-                    }
-                }
-
-            }
-
-            KFit++;
-            Fit++;
-        }
-        else if(KFit->first < Fit->first)
-        {
-            KFit = vFeatVecKF.lower_bound(Fit->first);
-        }
-        else
-        {
-            Fit = F.mFeatVec.lower_bound(KFit->first);
-        }
+    mapPointMatches = vector<Pt>(frame.N.at(featType), static_cast<Pt>(NULL));
+    const vector<Pt> mapPointsKF = keyframe->GetMapPointMatches(featType);
+    for(const auto& m : matches) {
+        Pt pMP = mapPointsKF[m.queryIdx];
+        if(!pMP || (pMP->isBad()))
+            continue;
+        mapPointMatches[m.trainIdx] = pMP;         
     }
+    return mapPointMatches.size();
+
+    // const vector<Pt> vpMapPointsKF = pKF->GetMapPointMatches(featType);
+
+    // vpMapPointMatches = vector<Pt>(F.N.at(featType),static_cast<Pt>(NULL));
+
+    // const DBoW2::FeatureVector &vFeatVecKF = pKF->mFeatVec;
+
+    // // Rotation Histogram (to check rotation consistency)
+    // int nMatches{0};
+    // float rotFactor{};
+    // vector<vector<int>> rotHist = initRotationHistogram(rotFactor,HISTO_LENGTH);
+
+    // // We perform the matching over ORB that belong to the same vocabulary node (at a certain level)
+    // DBoW2::FeatureVector::const_iterator KFit = vFeatVecKF.begin();
+    // DBoW2::FeatureVector::const_iterator Fit = F.mFeatVec.begin();
+    // DBoW2::FeatureVector::const_iterator KFend = vFeatVecKF.end();
+    // DBoW2::FeatureVector::const_iterator Fend = F.mFeatVec.end();
+
+    // while(KFit != KFend && Fit != Fend)
+    // {
+    //     if(KFit->first == Fit->first)
+    //     {
+    //         const vector<unsigned int> vIndicesKF = KFit->second;
+    //         const vector<unsigned int> vIndicesF = Fit->second;
+
+    //         for(size_t iKF=0; iKF<vIndicesKF.size(); iKF++)
+    //         {
+    //             const unsigned int realIdxKF = vIndicesKF[iKF];
+
+    //             Pt pMP = vpMapPointsKF[realIdxKF];
+
+    //             if(!pMP)
+    //                 continue;
+
+    //             if(pMP->isBad())
+    //                 continue;                
+
+    //             const cv::Mat &refDescriptor= pKF->mDescriptors.at(featType).row(realIdxKF);
+    //             Descriptor_Distance_Type bestDist1{highestPossibleDistance},bestDist2{highestPossibleDistance};
+    //             int bestIdxF{-1} ;
+
+    //             for(size_t iF=0; iF<vIndicesF.size(); iF++)
+    //             {
+    //                 const unsigned int realIdxF = vIndicesF[iF];
+
+    //                 if(vpMapPointMatches[realIdxF])
+    //                     continue;
+
+    //                 const cv::Mat &descriptor = F.mDescriptors.at(featType).row(realIdxF);
+    //                 const Descriptor_Distance_Type descDist =  DescriptorDistance(refDescriptor,descriptor,pMP->descriptorType);
+
+    //                 if(descDist < bestDist1)
+    //                 {
+    //                     bestDist2 = bestDist1;
+    //                     bestDist1 = descDist;
+    //                     bestIdxF = realIdxF;
+    //                 }
+    //                 else if(descDist < bestDist2)
+    //                 {
+    //                     bestDist2 = descDist;
+    //                 }
+    //             }
+
+    //             if(bestDist1 <= TH_LOW)
+    //             {
+    //                 if(static_cast<float>(bestDist1) < mfNNratio * static_cast<float>(bestDist2))
+    //                 {
+    //                     vpMapPointMatches[bestIdxF]=pMP;
+
+    //                     const cv::KeyPoint &kp = pKF->mvKeysUn.at(featType)[realIdxKF];
+    //                     nMatches++;
+    //                     if(mbCheckOrientation)
+    //                         updateRotationHistogram(rotHist,bestIdxF,kp,F.mvKeys.at(featType)[bestIdxF],rotFactor,HISTO_LENGTH);
+    //                 }
+    //             }
+
+    //         }
+
+    //         KFit++;
+    //         Fit++;
+    //     }
+    //     else if(KFit->first < Fit->first)
+    //     {
+    //         KFit = vFeatVecKF.lower_bound(Fit->first);
+    //     }
+    //     else
+    //     {
+    //         Fit = F.mFeatVec.lower_bound(KFit->first);
+    //     }
+    // }
 
 
-    if(mbCheckOrientation)
-        filterMatchesWithOrientation(rotHist,vpMapPointMatches,nMatches);
+    // if(mbCheckOrientation)
+    //     filterMatchesWithOrientation(rotHist,vpMapPointMatches,nMatches);
 
-    return nMatches;
+    // return nMatches;
 }
 
 // SearchByProjection 2
@@ -588,20 +609,24 @@ int FeatureMatcher::SearchByBoW(Keyframe pKF1, Keyframe pKF2, vector<Pt > &vpMat
 
 int FeatureMatcher::SearchForTriangulation(const Keyframe& keyframe1, const Keyframe& keyframe2, const mat3f& F12,
                                            vector<pair<size_t, size_t> > &matchedPairs, 
-                                           const FeatureType& featType){    
+                                           const FeatureType& featType){                                            
     matchedPairs.clear();
-
+    
+    // Ensure both frames contain the requested feature type
+    auto it1 = keyframe1->mDescriptors.find(featType);
+    auto it2 = keyframe2->mDescriptors.find(featType);
+    if (it1 == keyframe1->mDescriptors.end() || it2 == keyframe2->mDescriptors.end()) 
+        return 0; 
+    
     std::vector<cv::DMatch> matches;
     cv::BFMatcher(cv::NORM_HAMMING, true).match(keyframe1->mDescriptors.at(featType), keyframe2->mDescriptors.at(featType), matches);
 
     matchedPairs.reserve(matches.size());
     for(const auto& m : matches) {
         // Only triangulate points that don't already have a 3D MapPoint
-        if(!keyframe1->GetMapPoint(m.queryIdx, featType) && !keyframe2->GetMapPoint(m.trainIdx, featType)){
-            matchedPairs.emplace_back(static_cast<size_t>(m.queryIdx), static_cast<size_t>(m.trainIdx));        
-        }
+        if(!keyframe1->GetMapPoint(m.queryIdx, featType) && !keyframe2->GetMapPoint(m.trainIdx, featType))
+            matchedPairs.emplace_back(static_cast<size_t>(m.queryIdx), static_cast<size_t>(m.trainIdx));   
     }
-
     return matchedPairs.size();
 
     // const DBoW2::FeatureVector &vFeatVec1 = pKF1->mFeatVec;
@@ -1225,114 +1250,137 @@ int FeatureMatcher::SearchBySim3(Keyframe pKF1, Keyframe pKF2, vector<Pt> &vpMat
 int FeatureMatcher::SearchByProjection(Frame &CurrentFrame, const Frame &LastFrame, const float& radiusTh, const bool bMono, const FeatureType& featType)
 {
 
-    // Rotation Histogram (to check rotation consistency)
-    int nMatches{0};
-    float rotFactor{};
-    vector<vector<int>> rotHist = initRotationHistogram(rotFactor,HISTO_LENGTH);
+    // Ensure both frames contain the requested feature type
+    auto it1 = CurrentFrame.mDescriptors.find(featType);
+    auto it2 = LastFrame.mDescriptors.find(featType);
+    if (it1 == CurrentFrame.mDescriptors.end() || it2 == LastFrame.mDescriptors.end()) 
+        return 0; 
+    
+    std::vector<cv::DMatch> matches;
+    cv::BFMatcher(cv::NORM_HAMMING, true).match(CurrentFrame.mDescriptors.at(featType), LastFrame.mDescriptors.at(featType), matches);
 
-    const mat3f Rcw = CurrentFrame.Tcw.block<3,3>(0,0);
-    const vec3f tcw = CurrentFrame.Tcw.block<3,1>(0,3);
+    int numMatches = 0;
+    for(const auto& m : matches) {
+        Pt pMP = LastFrame.pts.at(featType)[m.trainIdx];
+        if(!pMP || (pMP->isBad()))
+            continue;
+        if(LastFrame.mvbOutlier.at(featType)[m.trainIdx])
+            continue;
 
-    const vec3f twc = -Rcw.transpose() * tcw;
-
-    const mat3f Rlw = LastFrame.Tcw.block<3,3>(0,0);
-    const vec3f tlw = LastFrame.Tcw.block<3,1>(0,3);
-
-    const vec3f tlc = Rlw * twc + tlw;
-
-    const bool bForward = false;//tlc(2) > CurrentFrame.mb && !bMono;
-    const bool bBackward = false;//-tlc(2) > CurrentFrame.mb && !bMono;
-    int numPmP{0};
-    for(int i=0; i<LastFrame.N.at(featType); i++)
-    {
-        Pt pMP = LastFrame.pts.at(featType)[i];
-
-        if((pMP) && (!pMP->isBad()))
-        {
-            ++numPmP;
-            if(!LastFrame.mvbOutlier.at(featType)[i])
-            {
-                // Project
-                vec3f x3Dw = pMP->GetWorldPos();
-                vec3f x3Dc = Rcw*x3Dw+tcw;
-
-                const float xc = x3Dc(0);
-                const float yc = x3Dc(1);
-                const float invzc = 1.0f / x3Dc(2);
-
-                if(invzc<0)
-                    continue;
-
-                float u = CurrentFrame.fx*xc*invzc+CurrentFrame.cx;
-                float v = CurrentFrame.fy*yc*invzc+CurrentFrame.cy;
-
-                if(u<CurrentFrame.mnMinX || u>CurrentFrame.mnMaxX)
-                    continue;
-                if(v<CurrentFrame.mnMinY || v>CurrentFrame.mnMaxY)
-                    continue;
-
-                // Search in a window. Size depends on scale
-                float keyPtSize = LastFrame.GetKeyPtSize(i, featType);
-                float radius = radiusScale * radiusTh * keyPtSize;
-
-                vector<size_t> vIndices2;
-
-                if(bForward)
-                    vIndices2 = CurrentFrame.GetFeaturesInArea(u,v, radius, (keyPtSize / CurrentFrame.sizeTolerance),CurrentFrame.maxKeyPtSize, featType);
-                else if(bBackward)
-                    vIndices2 = CurrentFrame.GetFeaturesInArea(u,v, radius, 0.0, (keyPtSize * CurrentFrame.sizeTolerance), featType);
-                else
-                    vIndices2 = CurrentFrame.GetFeaturesInArea(u,v, radius, (keyPtSize / CurrentFrame.sizeTolerance),(keyPtSize * CurrentFrame.sizeTolerance), featType);
-
-                if(vIndices2.empty())
-                    continue;
-
-                const cv::Mat refDescriptor = pMP->GetDescriptor();
-                Descriptor_Distance_Type bestDist{highestPossibleDistance};
-                int bestIdx2{-1};
-
-                for(vector<size_t>::const_iterator vit=vIndices2.begin(), vend=vIndices2.end(); vit!=vend; vit++)
-                {
-                    const size_t i2 = *vit;
-                    if(CurrentFrame.pts.at(featType)[i2])
-                        if(CurrentFrame.pts.at(featType)[i2]->NumberOfObservations() > 0)
-                            continue;
-
-                    if(CurrentFrame.mvuRight.at(featType)[i2]>0)
-                    {
-                        const float ur = u - CurrentFrame.mbf*invzc;
-                        const float er = fabs(ur - CurrentFrame.mvuRight.at(featType)[i2]);
-                        if(er>radius)
-                            continue;
-                    }
-
-                    const cv::Mat &descriptor = CurrentFrame.mDescriptors.at(featType).row(i2);
-                    const Descriptor_Distance_Type descDist = DescriptorDistance(refDescriptor,descriptor,pMP->descriptorType);
-
-                    if(descDist < bestDist)
-                    {
-                        bestDist = descDist;
-                        bestIdx2 = i2;
-                    }
-                }
-
-                if(bestDist <= TH_HIGH)
-                {
-                    CurrentFrame.pts.at(featType)[bestIdx2] = pMP;
-                    nMatches++;
-
-                    if(mbCheckOrientation)
-                        updateRotationHistogram(rotHist,bestIdx2,LastFrame.mvKeysUn.at(featType)[i],CurrentFrame.mvKeysUn.at(featType)[bestIdx2],rotFactor,HISTO_LENGTH);
-                }
-            }
-        }
+        CurrentFrame.pts.at(featType)[m.queryIdx] = pMP;
+        numMatches++;
     }
+    return numMatches;
 
-    //Apply rotation consistency
-    if(mbCheckOrientation)
-        filterMatchesWithOrientation(rotHist,CurrentFrame.pts.at(featType),nMatches);
 
-    return nMatches;
+    // Rotation Histogram (to check rotation consistency)
+    // int nMatches{0};
+    // float rotFactor{};
+    // vector<vector<int>> rotHist = initRotationHistogram(rotFactor,HISTO_LENGTH);
+
+    // const mat3f Rcw = CurrentFrame.Tcw.block<3,3>(0,0);
+    // const vec3f tcw = CurrentFrame.Tcw.block<3,1>(0,3);
+
+    // const vec3f twc = -Rcw.transpose() * tcw;
+
+    // const mat3f Rlw = LastFrame.Tcw.block<3,3>(0,0);
+    // const vec3f tlw = LastFrame.Tcw.block<3,1>(0,3);
+
+    // const vec3f tlc = Rlw * twc + tlw;
+
+    // const bool bForward = false;//tlc(2) > CurrentFrame.mb && !bMono;
+    // const bool bBackward = false;//-tlc(2) > CurrentFrame.mb && !bMono;
+    // int numPmP{0};
+    // for(int i=0; i<LastFrame.N.at(featType); i++)
+    // {
+    //     Pt pMP = LastFrame.pts.at(featType)[i];
+
+    //     if((pMP) && (!pMP->isBad()))
+    //     {
+    //         ++numPmP;
+    //         if(!LastFrame.mvbOutlier.at(featType)[i])
+    //         {
+    //             // Project
+    //             vec3f x3Dw = pMP->GetWorldPos();
+    //             vec3f x3Dc = Rcw*x3Dw+tcw;
+
+    //             const float xc = x3Dc(0);
+    //             const float yc = x3Dc(1);
+    //             const float invzc = 1.0f / x3Dc(2);
+
+    //             if(invzc<0)
+    //                 continue;
+
+    //             float u = CurrentFrame.fx*xc*invzc+CurrentFrame.cx;
+    //             float v = CurrentFrame.fy*yc*invzc+CurrentFrame.cy;
+
+    //             if(u<CurrentFrame.mnMinX || u>CurrentFrame.mnMaxX)
+    //                 continue;
+    //             if(v<CurrentFrame.mnMinY || v>CurrentFrame.mnMaxY)
+    //                 continue;
+
+    //             // Search in a window. Size depends on scale
+    //             float keyPtSize = LastFrame.GetKeyPtSize(i, featType);
+    //             float radius = radiusScale * radiusTh * keyPtSize;
+
+    //             vector<size_t> vIndices2;
+
+    //             if(bForward)
+    //                 vIndices2 = CurrentFrame.GetFeaturesInArea(u,v, radius, (keyPtSize / CurrentFrame.sizeTolerance),CurrentFrame.maxKeyPtSize, featType);
+    //             else if(bBackward)
+    //                 vIndices2 = CurrentFrame.GetFeaturesInArea(u,v, radius, 0.0, (keyPtSize * CurrentFrame.sizeTolerance), featType);
+    //             else
+    //                 vIndices2 = CurrentFrame.GetFeaturesInArea(u,v, radius, (keyPtSize / CurrentFrame.sizeTolerance),(keyPtSize * CurrentFrame.sizeTolerance), featType);
+
+    //             if(vIndices2.empty())
+    //                 continue;
+
+    //             const cv::Mat refDescriptor = pMP->GetDescriptor();
+    //             Descriptor_Distance_Type bestDist{highestPossibleDistance};
+    //             int bestIdx2{-1};
+
+    //             for(vector<size_t>::const_iterator vit=vIndices2.begin(), vend=vIndices2.end(); vit!=vend; vit++)
+    //             {
+    //                 const size_t i2 = *vit;
+    //                 if(CurrentFrame.pts.at(featType)[i2])
+    //                     if(CurrentFrame.pts.at(featType)[i2]->NumberOfObservations() > 0)
+    //                         continue;
+
+    //                 if(CurrentFrame.mvuRight.at(featType)[i2]>0)
+    //                 {
+    //                     const float ur = u - CurrentFrame.mbf*invzc;
+    //                     const float er = fabs(ur - CurrentFrame.mvuRight.at(featType)[i2]);
+    //                     if(er>radius)
+    //                         continue;
+    //                 }
+
+    //                 const cv::Mat &descriptor = CurrentFrame.mDescriptors.at(featType).row(i2);
+    //                 const Descriptor_Distance_Type descDist = DescriptorDistance(refDescriptor,descriptor,pMP->descriptorType);
+
+    //                 if(descDist < bestDist)
+    //                 {
+    //                     bestDist = descDist;
+    //                     bestIdx2 = i2;
+    //                 }
+    //             }
+
+    //             if(bestDist <= TH_HIGH)
+    //             {
+    //                 CurrentFrame.pts.at(featType)[bestIdx2] = pMP;
+    //                 nMatches++;
+
+    //                 if(mbCheckOrientation)
+    //                     updateRotationHistogram(rotHist,bestIdx2,LastFrame.mvKeysUn.at(featType)[i],CurrentFrame.mvKeysUn.at(featType)[bestIdx2],rotFactor,HISTO_LENGTH);
+    //             }
+    //         }
+    //     }
+    // }
+
+    // //Apply rotation consistency
+    // if(mbCheckOrientation)
+    //     filterMatchesWithOrientation(rotHist,CurrentFrame.pts.at(featType),nMatches);
+
+    // return nMatches;
 }
 
 // SearchByProjection 4
