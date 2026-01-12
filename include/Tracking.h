@@ -37,6 +37,7 @@
 #include "Initializer.h"
 #include "MapDrawer.h"
 #include "System.h"
+#include"FeatureMatcher.h"
 
 
 namespace ANYFEATURE_VSLAM
@@ -343,6 +344,8 @@ protected:
 
     // StereoInitialization()
     const int minKeypointsStereo{500};
+
+    std::shared_ptr<FeatureMatcher> matcher;
 };
 
 } //namespace ORB_SLAM

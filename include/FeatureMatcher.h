@@ -122,6 +122,8 @@ protected:
     const Descriptor_Distance_Type highestPossibleDistance{std::numeric_limits<Descriptor_Distance_Type>::max()};
 
     SiftMatchGPU sift_match_gpu_{};
+    cv::BFMatcher bf_matcher_hamming{cv::NORM_HAMMING, true};
+    cv::BFMatcher bf_matcher_L2{cv::NORM_L2, true};
 };
 
 }// namespace ORB_SLAM

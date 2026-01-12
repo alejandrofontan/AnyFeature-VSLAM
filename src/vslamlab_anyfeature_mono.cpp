@@ -7,6 +7,7 @@
 
 #include<System.h>
 #include<Types.h>
+#include <yaml-cpp/yaml.h>
 
 using namespace std;
 namespace ANYFEATURE_VSLAM{
@@ -108,14 +109,17 @@ int main(int argc, char **argv)
     }
     
     // AnyFeature-VSLAM inputs
-    // feature = "orb32";
-    // int feature_id = get_feature_id(feature);
-    // auto featureType = FeatureType(feature_id);
+    YAML::Node settings = YAML::LoadFile(settings_yaml);
+    const vector<std::string> features = settings["features"].as<vector<std::string>>();
 
-    const vector<FeatureType> featureTypes{FEAT_ORB};
-    //const vector<FeatureType> featureTypes{FEAT_SIFT128};
-    //const vector<FeatureType> featureTypes{featureType};
-    
+    vector<FeatureType> featureTypes{};
+    for(const auto& feat : features) {
+        int feature_id = get_feature_id(feat);
+        auto featureType = FeatureType(feature_id);
+        featureTypes.push_back(featureType);
+        std::cout << "[vslamlab_anyfeature_mono.cpp] Loaded feature from settings YAML: " << feat << std::endl;
+    }
+
     std::map<FeatureType, string> feature_settings_yaml_file;
     feature_settings_yaml_file[FEAT_ORB] = "settings/orb32_settings.yaml";
     feature_settings_yaml_file[FEAT_AKAZE61] = "settings/akaze61_settings.yaml";

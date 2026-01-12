@@ -24,7 +24,6 @@
 #include<opencv2/core/core.hpp>
 //#include<opencv2/features2d/features2d.hpp>
 
-#include"FeatureMatcher.h"
 #include"FrameDrawer.h"
 #include"Converter.h"
 #include"Map.h"
@@ -84,6 +83,8 @@ Tracking::Tracking(System *pSys, shared_ptr<Vocabulary> vocabulary,
     if(sensor==System::MONOCULAR)
         initFeatureExtractor[featureTypes[featureInitialization]] = Tracking::getFeatureExtractor(scaleNumFeaturesMonocular , 
             "none", featureTypes[featureInitialization]); 
+    
+    matcher = std::make_shared<FeatureMatcher>();        
 }
 
 void Tracking::SetLocalMapper(std::shared_ptr<LocalMapping> localMapper_)
@@ -476,9 +477,8 @@ void Tracking::MonocularInitialization(const FeatureType& featureType)
             return;
         }
         // Find correspondences
-        FeatureMatcher matcher(nnratio_monoInit, true);
-
-        int nmatches = matcher.SearchForInitialization(mInitialFrame,currentFrame,mvbPrevMatched,mvIniMatches,100,
+        
+        int nmatches = matcher->SearchForInitialization(mInitialFrame,currentFrame,mvbPrevMatched,mvIniMatches,100,
              descriptorType, featureType);
 
              // Check if there are enough correspondences
@@ -627,12 +627,11 @@ bool Tracking::TrackReferenceKeyFrame()
 {   
     // We perform first an ORB matching with the reference keyframe
     // If enough matches are found we set up a PnP solver
-    FeatureMatcher matcher(nnratio_trackRefKey, true);
     vector<Pt> vpMapPointMatches;
 
     int nmatches{0};
     for (auto& [ft, N] : currentFrame.N) {
-        int nmatches_ft = matcher.SearchByBoW(refKeyframe, currentFrame, vpMapPointMatches, ft);
+        int nmatches_ft = matcher->SearchByBoW(refKeyframe, currentFrame, vpMapPointMatches, ft);
         if (nmatches_ft == 0)
             continue;
         currentFrame.pts[ft] = vpMapPointMatches;   
@@ -742,8 +741,6 @@ void Tracking::UpdateLastFrame()
 bool Tracking::TrackWithMotionModel()
 {
 
-    FeatureMatcher matcher(nnratio_trackMotModel, true);
-
     // Update last frame pose according to its reference keyframe
     // Create "visual odometry" points if in Localization Mode
     UpdateLastFrame();
@@ -763,7 +760,7 @@ bool Tracking::TrackWithMotionModel()
     
     int nmatches{0};
     for (auto& [ft, N] : currentFrame.N) {
-        int nmatches_ft = matcher.SearchByProjection(currentFrame,lastFrame,radiusTh,
+        int nmatches_ft = matcher->SearchByProjection(currentFrame,lastFrame,radiusTh,
             mSensor==System::MONOCULAR, ft);
         nmatches += nmatches_ft;
     }
@@ -773,7 +770,7 @@ bool Tracking::TrackWithMotionModel()
     {   
         for (auto& [ft, N] : currentFrame.N) {
             fill(currentFrame.pts.at(ft).begin(),currentFrame.pts.at(ft).end(),static_cast<Pt>(nullptr));
-            nmatches = matcher.SearchByProjection(currentFrame,lastFrame, radiusTh_scale_trackMotModel * radiusTh, 
+            nmatches = matcher->SearchByProjection(currentFrame,lastFrame, radiusTh_scale_trackMotModel * radiusTh, 
                 mSensor==System::MONOCULAR, ft);
         }
     }
@@ -1044,7 +1041,6 @@ bool Tracking::TrackLocalMap()
         }
 
         if(nToMatch > 0){
-            FeatureMatcher matcher(nnratio_slp);
             float radiusTh = radiusTh_low_slp;
             if(mSensor == System::RGBD)
                 radiusTh = radiusTh_medium_slp;
@@ -1053,7 +1049,7 @@ bool Tracking::TrackLocalMap()
             if(currentFrame.mnId < lastRelocFrameId + idSum)
                 radiusTh = radiusTh_high_slp;
 
-            matcher.SearchByProjection(currentFrame, localPts);//, radiusTh);
+            matcher->SearchByProjection(currentFrame, localPts);//, radiusTh);
 
         }
     }
@@ -1194,7 +1190,6 @@ bool Tracking::Relocalization(const FeatureType& featureType)
 
     // We perform first an ORB matching with each candidate
     // If enough matches are found we set up a PnP solver
-    FeatureMatcher matcher(nnratio_low_reloc, true);
 
     vector<PnPsolver*> vpPnPsolvers;
     vpPnPsolvers.resize(nKFs);
@@ -1214,7 +1209,7 @@ bool Tracking::Relocalization(const FeatureType& featureType)
             vbDiscarded[i] = true;
         else
         {
-            int nmatches = matcher.SearchByBoW(pKF,currentFrame,vvpMapPointMatches[i], featureType);
+            int nmatches = matcher->SearchByBoW(pKF,currentFrame,vvpMapPointMatches[i], featureType);
             if(nmatches < minNmatches)
             {
                 vbDiscarded[i] = true;
@@ -1233,7 +1228,6 @@ bool Tracking::Relocalization(const FeatureType& featureType)
     // Alternatively perform some iterations of P4P RANSAC
     // Until we found a camera pose supported by enough inliers
     bool bMatch = false;
-    FeatureMatcher matcher2(nnratio_high_reloc, true);
 
     while(nCandidates>0 && !bMatch)
     {
@@ -1291,7 +1285,7 @@ bool Tracking::Relocalization(const FeatureType& featureType)
                 // If few inliers, search by projection in a coarse window and optimize again
                 if(nGood < nGood_high)
                 {
-                    int nadditional =matcher2.SearchByProjection(currentFrame,vpCandidateKFs[i],sFound,radiusTh_high_reloc, true, featureType);
+                    int nadditional = matcher->SearchByProjection(currentFrame,vpCandidateKFs[i],sFound,radiusTh_high_reloc, true, featureType);
 
                     if(nadditional+nGood >= nGood_high)
                     {
@@ -1305,7 +1299,7 @@ bool Tracking::Relocalization(const FeatureType& featureType)
                             for(int ip =0; ip<currentFrame.N.at(featureType); ip++)
                                 if(currentFrame.pts.at(featureType)[ip])
                                     sFound.insert(currentFrame.pts.at(featureType)[ip]);
-                            nadditional =matcher2.SearchByProjection(currentFrame,vpCandidateKFs[i],sFound,radiusTh_low_reloc,false, featureType);
+                            nadditional =matcher->SearchByProjection(currentFrame,vpCandidateKFs[i],sFound,radiusTh_low_reloc,false, featureType);
 
                             // Final optimization
                             if(nGood+nadditional >= nGood_high)

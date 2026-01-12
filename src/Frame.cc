@@ -20,7 +20,6 @@
 
 #include "Frame.h"
 #include "Converter.h"
-#include "FeatureMatcher.h"
 #include <thread>
 
 namespace ANYFEATURE_VSLAM

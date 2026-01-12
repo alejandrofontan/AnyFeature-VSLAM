@@ -26,6 +26,7 @@
 #include "LoopClosing.h"
 #include "Tracking.h"
 #include "KeyFrameDatabase.h"
+#include "FeatureMatcher.h"
 
 #include <mutex>
 
@@ -117,6 +118,8 @@ protected:
     std::list<Pt> mlpRecentAddedMapPoints;
 
     std::mutex mMutexNewKFs;
+
+    std::shared_ptr<FeatureMatcher> matcher;
 
     bool mbAbortBA;
 

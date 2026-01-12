@@ -33,6 +33,7 @@ LocalMapping::LocalMapping(shared_ptr<Map> pMap, const float bMonocular, const v
     mbMonocular(bMonocular), mbResetRequested(false), mbFinishRequested(false), mbFinished(true), mpMap(pMap),
     mbAbortBA(false), mbStopped(false), mbStopRequested(false), mbNotStop(false), mbAcceptKeyFrames(true), featureTypes(featureTypes)
 {
+    matcher = std::make_shared<FeatureMatcher>();
 }
 
 void LocalMapping::SetLoopCloser(std::shared_ptr<LoopClosing>  loopCloser_)
@@ -251,7 +252,6 @@ void LocalMapping::CreateNewMapPoints()
     mpCurrentKeyFrame->getFullIntrinsics(fx1, fy1, cx1, cy1, invfx1, invfy1);
 
     // Search matches with epipolar restriction and triangulate
-    FeatureMatcher matcher(CREATE_NEW_MAP_POINTS_DIST_RATIO, false);
     const float ratioFactor = CREATE_NEW_MAP_POINTS_RATIO_FACTOR * mpCurrentKeyFrame->sizeTolerance;
 
     std::map<FeatureType, int> newMapPoints;
@@ -295,7 +295,7 @@ void LocalMapping::CreateNewMapPoints()
         std::map<FeatureType, vector<pair<size_t,size_t>>> vMatchedIndices;
         
         for(auto& [featureType, N_]: pKF2->N){            
-            matcher.SearchForTriangulation(mpCurrentKeyFrame, pKF2, F12, vMatchedIndices[featureType], featureType);
+            matcher->SearchForTriangulation(mpCurrentKeyFrame, pKF2, F12, vMatchedIndices[featureType], featureType);
         
             // Triangulate each match
             const int nmatches = vMatchedIndices.at(featureType).size();
@@ -491,13 +491,13 @@ void LocalMapping::SearchInNeighbors()
 
 
     // Search matches by projection from current KF in target KFs
-    FeatureMatcher matcher;
+    //FeatureMatcher matcher;
     vector<Pt> vpMapPointMatches = mpCurrentKeyFrame->GetMapPointMatches(featureType);
     for(vector<Keyframe >::iterator vit=vpTargetKFs.begin(), vend=vpTargetKFs.end(); vit!=vend; vit++)
     {
         Keyframe  pKFi = *vit;
 
-        matcher.Fuse(pKFi,vpMapPointMatches,3.0f, featureType);
+        matcher->Fuse(pKFi,vpMapPointMatches,3.0f, featureType);
     }
 
     // Search matches by projection from target KFs in current KF
@@ -522,7 +522,7 @@ void LocalMapping::SearchInNeighbors()
         }
     }
 
-    matcher.Fuse(mpCurrentKeyFrame,vpFuseCandidates,3.0f, featureType);
+    matcher->Fuse(mpCurrentKeyFrame,vpFuseCandidates,3.0f, featureType);
 
 
     // Update points
