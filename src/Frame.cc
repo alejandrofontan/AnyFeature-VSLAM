@@ -189,6 +189,7 @@ Frame::Frame(const Image & img, const double &timeStamp,
 
     // Feature extraction
     ExtractFeatures(0,img);
+    
     if(Ntotal == 0)
         return;
 

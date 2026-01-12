@@ -6,7 +6,7 @@
 #define ANYFEATURE_VSLAM_FEATURE_SIFT128_H
 
 #include "FeatureExtractor.h"
-#include "SiftGPU/SiftGPU.h"
+#include "SiftGPU.h"
 
 namespace ANYFEATURE_VSLAM {
 

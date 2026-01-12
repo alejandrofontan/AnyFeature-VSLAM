@@ -9,12 +9,18 @@
 ANYFEATURE_VSLAM::FeatureExtractor_sift128::FeatureExtractor_sift128(const int &nfeatures_, std::shared_ptr<FeatureExtractorSettings> &settings_):
         FeatureExtractor(nfeatures_,settings_){
 
+    std::cout << "[FeatureExtractor_sift128] Initializing SIFT128 Feature Extractor with " << nfeatures << " features." << std::endl;
+
     std::vector<std::string> sift_gpu_args;
     sift_gpu_args.push_back("./sift_gpu");
 
+    // Use CUDA version       
+    sift_gpu_args.push_back("-cuda");
+    sift_gpu_args.push_back(std::to_string(0));
+
     // Darkness adaptivity (hidden feature). Significantly improves
     // distribution of features. Only available in GLSL version.
-    sift_gpu_args.push_back("-da");
+    //sift_gpu_args.push_back("-da");
 
     // No verbose logging.
     sift_gpu_args.push_back("-v");
@@ -22,28 +28,31 @@ ANYFEATURE_VSLAM::FeatureExtractor_sift128::FeatureExtractor_sift128(const int &
 
     // Keep the highest level features.
     sift_gpu_args.push_back("-tc2");
-    sift_gpu_args.push_back(std::to_string(nfeatures));
+    sift_gpu_args.push_back(std::to_string(8192));
 
     // First Octave to start detection (default: 0).
     sift_gpu_args.push_back("-fo");
-    sift_gpu_args.push_back(std::to_string(0));
+    sift_gpu_args.push_back(std::to_string(-1));
 
     // Maximum number of octaves (default: not limit).
     sift_gpu_args.push_back("-no");
-    sift_gpu_args.push_back(std::to_string(8));
+    sift_gpu_args.push_back(std::to_string(4));
 
     // DOG levels in an octave (default: 3)
     sift_gpu_args.push_back("-d");
     sift_gpu_args.push_back(std::to_string(3));
 
     // DOG threshold (default: 0.02/3)
-    //sift_gpu_args.push_back("-t");
-    //sift_gpu_args.push_back(std::to_string(options.peak_threshold));
+    sift_gpu_args.push_back("-t");
+    sift_gpu_args.push_back(std::to_string(0.02/3));
 
     // Edge Threshold (default : 10.0)
     sift_gpu_args.push_back("-e");
     sift_gpu_args.push_back(std::to_string(10.0));
 
+     // Maximum number of orientations.
+    sift_gpu_args.push_back("-mo");
+    sift_gpu_args.push_back(std::to_string(2));
     // Let (0, 0) be center of top-left pixel instead of corner with this
     // parameter. The corner is (0, 0) by default, but Lowe‟s SIFT and
     // sift++ are using the pixel center.
@@ -55,7 +64,8 @@ ANYFEATURE_VSLAM::FeatureExtractor_sift128::FeatureExtractor_sift128(const int &
         sift_gpu_args_cstr.push_back(arg.c_str());
 
     sift = std::make_shared<SiftGPU>();
-    sift->ParseParam((int) sift_gpu_args_cstr.size(), const_cast<char **>(sift_gpu_args_cstr.data()));
+    //sift->ParseParam((int) sift_gpu_args_cstr.size(), const_cast<char **>(sift_gpu_args_cstr.data()));
+    sift->ParseParam(sift_gpu_args_cstr.size(), sift_gpu_args_cstr.data());
 
     int support = sift->CreateContextGL();
     if(support != SiftGPU::SIFTGPU_FULL_SUPPORTED) std::terminate();
@@ -87,15 +97,18 @@ void ANYFEATURE_VSLAM::FeatureExtractor_sift128::detectKeypoints(
         keyPt.pt.x = key.x;
         keyPt.pt.y = key.y;
         keyPt.class_id = iKey;
-        keyPt.size = key.s;
-        keyPt.angle = key.o;
-        keyPt.octave = int(log2(key.s / 1.6454));
+        keyPt.size = 1;//key.s;
+        keyPt.angle = 0;//key.o;
+        keyPt.octave = 0;//int(log2(key.s / 1.6454));
         keyPt.response = 1.0;
         keypoints_level[keyPt.octave].push_back(keyPt);
         ++iKey;
         //std::cout << keyPt.size << " " << keyPt.octave << " " << keyPt.angle << " " << keyPt.response << " " <<std::endl;
     }
 }
+
+typedef Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
+    FeatureDescriptorsFloat;
 
 void ANYFEATURE_VSLAM::FeatureExtractor_sift128::computeDescriptors(
         std::map<int,cv::Mat>& descriptors_level,
@@ -105,13 +118,24 @@ void ANYFEATURE_VSLAM::FeatureExtractor_sift128::computeDescriptors(
     int numKeypoints = sift->GetFeatureNum();
     std::vector<SiftGPU::SiftKeypoint> keys(numKeypoints);
     std::vector<float> descriptors(128 * numKeypoints);
-    sift->GetFeatureVector(nullptr, &descriptors[0]);
+    // sift->GetFeatureVector(nullptr, &descriptors[0]);
+    FeatureDescriptorsFloat descriptors_float(numKeypoints, 128);
+    sift->GetFeatureVector(nullptr, descriptors_float.data());
+    for (Eigen::MatrixXf::Index r = 0; r < descriptors_float.rows(); ++r) {
+        descriptors_float.row(r) *= 1 / descriptors_float.row(r).lpNorm<1>();
+        descriptors_float.row(r) = descriptors_float.row(r).array().sqrt();
+    }
+    for(auto& [level, keypoints] : keypoints_level) {
+        int nKeys = static_cast<int>(keypoints.size());
+        descriptors_level[level] = cv::Mat(nKeys, 128, CV_32F);
 
-    for(auto& [level,keypoints]: keypoints_level){
-        descriptors_level[level] = cv::Mat(int(keypoints.size()), 128, CV_32F);
-        for (int i = 0; i < keypoints.size(); ++i) {
+        for (int i = 0; i < nKeys; ++i) {
+            // Use the class_id to find the original index in the descriptors_float matrix
+            int original_idx = keypoints[i].class_id;
+            
             for (int j = 0; j < 128; ++j) {
-                descriptors_level[level].at<float>(i, j) = descriptors[keypoints[i].class_id * 128 + j];
+                // Correctly pulling from the normalized Eigen matrix
+                descriptors_level[level].at<float>(i, j) = descriptors_float(original_idx, j);
             }
         }
     }

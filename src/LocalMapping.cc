@@ -296,7 +296,6 @@ void LocalMapping::CreateNewMapPoints()
         
         for(auto& [featureType, N_]: pKF2->N){            
             matcher.SearchForTriangulation(mpCurrentKeyFrame, pKF2, F12, vMatchedIndices[featureType], featureType);
-            std::cout << "Found " << vMatchedIndices[featureType].size() << " matches for triangulation in feature " << featureType << std::endl;
         
             // Triangulate each match
             const int nmatches = vMatchedIndices.at(featureType).size();
@@ -729,7 +728,8 @@ void LocalMapping::KeyFrameCulling()
                     keyframes_to_positions[pKF->keyId].clear();
                     pKF->SetBadFlag();
                 }*/
-    //#else
+    //#else     
+                //if (pKF->keyId % 10 != 0)
                 pKF->SetBadFlag();
     //#endif
             }

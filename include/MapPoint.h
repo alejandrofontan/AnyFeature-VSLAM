@@ -87,7 +87,7 @@ public:
     Pt ComputeDistinctiveDescriptors();
 
     cv::Mat GetDescriptor();
-
+    
     void UpdateNormalAndDepth();
 
     float GetMinDistanceInvariance();

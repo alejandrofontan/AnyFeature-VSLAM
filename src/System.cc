@@ -45,8 +45,6 @@ System::System(const string &vocabularyFolder,
                mSensor(sensor), viewer(static_cast<shared_ptr<Viewer>>(nullptr)), mbReset(false),mbActivateLocalizationMode(false),
         mbDeactivateLocalizationMode(false), featureTypes(featureTypes)
 {
-    std::cout << "System::System() called" << std::endl;
-
     // Output welcome message
     cout << "Any-Feature V-SLAM 2024, Alejandro Fontan Villacampa, Queensland University of Technology\n"
     "    Acknowledgments to: Javier Civera and Michael Milford (Any-Feature V-SLAM)\n"
@@ -100,7 +98,7 @@ System::System(const string &vocabularyFolder,
     mapDrawer = make_shared<MapDrawer>(mpMap, strSettingsFile,featureTypes);
 
     // Initialize matching thresholds
-    FeatureMatcher::setDescriptorDistanceThresholds(feature_settings_yaml_file.at(FEAT_ORB));
+    FeatureMatcher::setDescriptorDistanceThresholds(feature_settings_yaml_file.at(featureTypes[0]));
 
     //Initialize the Tracking thread
     //(it will live in the main thread of execution, the one that called this constructor)

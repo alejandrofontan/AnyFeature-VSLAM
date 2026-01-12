@@ -5,7 +5,10 @@
 # Feature Extractor 
 FeatureExtractor.numOctaves: 8
 FeatureExtractor.scaleFactor: 2.0
-FeatureExtractor.detectionTh: 10.0
+FeatureExtractor.detectionTh: 5.0
 
 # Feature Matcher 
-FeatureMatcher.matchingTh: 0.5
+FeatureMatcher.TH_LOW: 0.7
+FeatureMatcher.TH_HIGH: 0.7
+FeatureMatcher.descDistTh_high_reloc: 0.5
+FeatureMatcher.descDistTh_low_reloc: 0.5

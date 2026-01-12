@@ -28,6 +28,7 @@
 #include "MapPoint.h"
 #include "KeyFrame.h"
 #include "Frame.h"
+#include "Feature_sift128.h"
 
 
 namespace ANYFEATURE_VSLAM
@@ -41,10 +42,13 @@ public:
 
     // Computes the Hamming distance between two ORB descriptors
     static Descriptor_Distance_Type DescriptorDistance(const cv::Mat &a, const cv::Mat &b, const DescriptorType& descriptorType_);
+    cv::NormTypes getNormType(const FeatureType& featureType_);
+    std::vector<cv::DMatch> featureMatching(const cv::Mat& desc1, const cv::Mat& desc2, const FeatureType& ft);
 
     // Search matches between Frame keypoints and projected MapPoints. Returns number of matches
     // Used to track the local map (Tracking)
     int SearchByProjection(Frame &F, const std::vector<Pt> &vpMapPoints, const float& radiusTh);
+    int SearchByProjection(Frame &Frame, const vector<Pt> &mapPoints);
 
     // Project MapPoints tracked in last frame into the current frame and search matches.
     // Used to track from previous frame (Tracking)
@@ -117,6 +121,7 @@ protected:
 
     const Descriptor_Distance_Type highestPossibleDistance{std::numeric_limits<Descriptor_Distance_Type>::max()};
 
+    SiftMatchGPU sift_match_gpu_{};
 };
 
 }// namespace ORB_SLAM

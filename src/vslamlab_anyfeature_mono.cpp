@@ -108,12 +108,18 @@ int main(int argc, char **argv)
     }
     
     // AnyFeature-VSLAM inputs
-    int feature_id = get_feature_id(feature);
-    auto featureType = FeatureType(feature_id);
+    // feature = "orb32";
+    // int feature_id = get_feature_id(feature);
+    // auto featureType = FeatureType(feature_id);
 
+    const vector<FeatureType> featureTypes{FEAT_ORB};
+    //const vector<FeatureType> featureTypes{FEAT_SIFT128};
+    //const vector<FeatureType> featureTypes{featureType};
+    
     std::map<FeatureType, string> feature_settings_yaml_file;
     feature_settings_yaml_file[FEAT_ORB] = "settings/orb32_settings.yaml";
     feature_settings_yaml_file[FEAT_AKAZE61] = "settings/akaze61_settings.yaml";
+    feature_settings_yaml_file[FEAT_SIFT128] = "settings/sift128_settings.yaml";
 
     // Retrieve paths to images
     vector<string> imageFilenames{};
@@ -124,7 +130,7 @@ int main(int argc, char **argv)
     size_t nImages = imageFilenames.size();
 
     // Create SLAM system. It initializes all system threads and gets ready to process frames.
-    const vector<FeatureType> featureTypes{featureType, FEAT_AKAZE61};
+    
     ANYFEATURE_VSLAM::System SLAM(path_to_vocabulary_folder, 
                                   calibration_yaml, settings_yaml, feature_settings_yaml_file,
                                   ANYFEATURE_VSLAM::System::MONOCULAR,

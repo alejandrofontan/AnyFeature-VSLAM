@@ -50,8 +50,7 @@ KeyFrame::KeyFrame(Frame &F, shared_ptr<Map> pMap, shared_ptr<KeyFrameDatabase>p
     mbToBeErased(false), mbBad(false), mHalfBaseline(F.mb/2), mpMap(pMap), featureTypes(F.featureTypes)
 {
     keyId = nNextId++;
-
-    for(FeatureType ft : featureTypes){
+    for(auto& [ft, N_] : N){
         mGrid[ft].resize(mnGridCols);
         for(int i=0; i<mnGridCols;i++)
         {
@@ -62,8 +61,9 @@ KeyFrame::KeyFrame(Frame &F, shared_ptr<Map> pMap, shared_ptr<KeyFrameDatabase>p
     }
     SetPose(F.Tcw);
 
-    for(FeatureType ft : featureTypes)
-        mDescriptors[ft] = F.mDescriptors.at(ft).clone();
+    for(auto& [ft, N_] : N)
+        if (N_ > 0)
+            mDescriptors[ft] = F.mDescriptors.at(ft).clone();
 }
 
 void KeyFrame::ComputeBoW(const FeatureType &featType)

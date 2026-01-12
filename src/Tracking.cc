@@ -76,13 +76,14 @@ Tracking::Tracking(System *pSys, shared_ptr<Vocabulary> vocabulary,
 
     // Load feature parameters from settings yaml file
     for (auto& ft: featureTypes){
-        featureExtractorLeft[ft] = Tracking::getFeatureExtractor(1, std::string(feature_settings_yaml_file.at(ft)), featureTypes[ft]);
+        featureExtractorLeft[ft] = Tracking::getFeatureExtractor(1, std::string(feature_settings_yaml_file.at(ft)), ft);
     }
     //if(sensor==System::STEREO)
         //featureExtractorRight = std::make_shared<FeatureExtractor>(numFeatures,extractorSettings);
 
     if(sensor==System::MONOCULAR)
-        initFeatureExtractor[featureTypes[featureInitialization]] = Tracking::getFeatureExtractor(scaleNumFeaturesMonocular , "none", featureTypes[featureInitialization]); 
+        initFeatureExtractor[featureTypes[featureInitialization]] = Tracking::getFeatureExtractor(scaleNumFeaturesMonocular , 
+            "none", featureTypes[featureInitialization]); 
 }
 
 void Tracking::SetLocalMapper(std::shared_ptr<LocalMapping> localMapper_)
@@ -194,7 +195,6 @@ void Tracking::Track()
             {
                 // Local Mapping might have changed some MapPoints tracked in last frame
                 CheckReplacedInLastFrame();
-
                 if((mVelocity(3,3) != 1.0f) || currentFrame.mnId<lastRelocFrameId+2)
                 {   
                     bOK = TrackReferenceKeyFrame();
@@ -288,6 +288,7 @@ void Tracking::Track()
         currentFrame.refKeyframe = refKeyframe;
 
         // If we have an initial estimation of the camera pose and matching. Track the local map.
+
         if(!onlyTracking)
         {   
             if(bOK)
@@ -301,6 +302,7 @@ void Tracking::Track()
             if(bOK && !mbVO)
                 bOK = TrackLocalMap();
         }
+
         if(bOK)
             mState = OK;
         else
@@ -345,7 +347,6 @@ void Tracking::Track()
             // Check if we need to insert a new keyframe
             if(NeedNewKeyFrame())
                 CreateNewKeyFrame();
-
             // We allow points with high innovation (considererd outliers by the Huber Function)
             // pass to the new keyframe, so that bundle adjustment will finally decide
             // if they are outliers or not. We don't want next frame to estimate its position
@@ -358,7 +359,6 @@ void Tracking::Track()
                 }
             }
         }
-
         // Reset if the camera get lost soon after initialization
         if(mState==LOST)
         {
@@ -1007,7 +1007,6 @@ bool Tracking::TrackLocalMap()
         //         }
         //     }
         // }
-
         localMapper->InsertKeyFrame(keyframe);
         localMapper->SetNotStop(false);
         lastKeyFrameId = currentFrame.mnId;
@@ -1028,6 +1027,7 @@ bool Tracking::TrackLocalMap()
                     pt = nullptr;
             }
         }
+
         // Project points in frame and check its visibility
         int nToMatch=0;
         for(auto& pt: localPts){
@@ -1053,7 +1053,8 @@ bool Tracking::TrackLocalMap()
             if(currentFrame.mnId < lastRelocFrameId + idSum)
                 radiusTh = radiusTh_high_slp;
 
-            matcher.SearchByProjection(currentFrame,localPts, radiusTh);
+            matcher.SearchByProjection(currentFrame, localPts);//, radiusTh);
+
         }
     }
 
@@ -1541,7 +1542,6 @@ shared_ptr<FeatureExtractor> Tracking::getFeatureExtractor(const int& scaleNumFe
                                                             const FeatureType& featureType){
     //cv::FileStorage fSettings(featureSettingsYamlFile, cv::FileStorage::READ);
     cout << endl  << "Feature Extractor Parameters: " << endl;
-
     const KeypointType keypointType = GetKeypointType(featureType);
     const DescriptorType descriptorType = GetDescriptorType(featureType);
 

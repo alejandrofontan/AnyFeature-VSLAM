@@ -48,15 +48,15 @@ namespace ANYFEATURE_VSLAM
 {
 
 // #ifdef VANILLA_ORB_SLAM2
-Descriptor_Distance_Type FeatureMatcher::TH_HIGH = Descriptor_Distance_Type(100);
-Descriptor_Distance_Type FeatureMatcher::TH_LOW = Descriptor_Distance_Type(50);
-Descriptor_Distance_Type FeatureMatcher::descDistTh_high_reloc = Descriptor_Distance_Type(100);
-Descriptor_Distance_Type FeatureMatcher::descDistTh_low_reloc = Descriptor_Distance_Type(64);
+// Descriptor_Distance_Type FeatureMatcher::TH_HIGH = Descriptor_Distance_Type(100);
+// Descriptor_Distance_Type FeatureMatcher::TH_LOW = Descriptor_Distance_Type(50);
+// Descriptor_Distance_Type FeatureMatcher::descDistTh_high_reloc = Descriptor_Distance_Type(100);
+// Descriptor_Distance_Type FeatureMatcher::descDistTh_low_reloc = Descriptor_Distance_Type(64);
 // #else
-// Descriptor_Distance_Type FeatureMatcher::TH_HIGH = Descriptor_Distance_Type(0.0);
-// Descriptor_Distance_Type FeatureMatcher::TH_LOW = Descriptor_Distance_Type(0.0);
-// Descriptor_Distance_Type FeatureMatcher::descDistTh_high_reloc = Descriptor_Distance_Type(0.0);
-// Descriptor_Distance_Type FeatureMatcher::descDistTh_low_reloc = Descriptor_Distance_Type(0.0);
+Descriptor_Distance_Type FeatureMatcher::TH_HIGH = Descriptor_Distance_Type(0.0);
+Descriptor_Distance_Type FeatureMatcher::TH_LOW = Descriptor_Distance_Type(0.0);
+Descriptor_Distance_Type FeatureMatcher::descDistTh_high_reloc = Descriptor_Distance_Type(0.0);
+Descriptor_Distance_Type FeatureMatcher::descDistTh_low_reloc = Descriptor_Distance_Type(0.0);
 // #endif
 
 VerbosityLevel FeatureMatcher::verbosity{MEDIUM};
@@ -66,10 +66,115 @@ float FeatureMatcher::radiusScale{1.15f};
 
 FeatureMatcher::FeatureMatcher(float nnratio, bool checkOri): mfNNratio(nnratio), mbCheckOrientation(checkOri)
 {
+    sift_match_gpu_ = SiftMatchGPU();
+    sift_match_gpu_.SetLanguage(SiftMatchGPU::SIFTMATCH_CUDA);
+    if (sift_match_gpu_.VerifyContextGL() == 0) {
+        std::cout << "Initialization failed!" << std::endl;
+    }
+    int max_supported = 4000;
+    sift_match_gpu_ .Allocate(max_supported, 1);
 }
 
 // SearchByProjection 1
 // TrackLocalMap
+
+int FeatureMatcher::SearchByProjection(Frame &frame, const vector<Pt> &mapPoints){
+
+    std::map<FeatureType, std::map<KeyframeId, std::vector<Pt>>> mapPointsByType;
+    for (const auto& pt : mapPoints) 
+        mapPointsByType[pt->featureType][pt->GetCurrentRefKeyframe()->keyId].push_back(pt);
+
+    std::map<FeatureType, std::vector<size_t>> toBeMatched;
+    std::map<FeatureType, cv::Mat> frameDescriptors;
+    
+    for(const auto& [ft, pts]: frame.pts){
+        int ptIdx{-1};
+        for(const auto& pt : pts){
+            ptIdx++;
+            if(pt && (pt->NumberOfObservations() > 0))
+                continue;
+            cv::Mat desc = frame.mDescriptors.at(ft).row(ptIdx);      
+            frameDescriptors[ft].push_back(desc);  
+            toBeMatched[ft].push_back(ptIdx);
+        }
+    }
+
+    int numMatches = 0;
+    for(auto& [ft, keyframe]: mapPointsByType){
+        std::vector<int> numMachedPoints;
+        
+        if(toBeMatched[ft].empty())
+            continue;
+
+            for(auto& [kfId, pts]: keyframe){
+            numMachedPoints.push_back(0);
+
+            cv::Mat descriptors;
+            for(auto pt: pts){
+                cv::Mat desc = pt->GetDescriptor();
+                if (desc.rows > 1 && desc.cols > 0) desc = desc.row(0); 
+                descriptors.push_back(desc);
+            }
+            
+            std::vector<cv::DMatch> matches = featureMatching(frameDescriptors.at(ft), descriptors, ft);
+            //cv::BFMatcher(getNormType(ft), true).match(frameDescriptors.at(ft), descriptors, matches);
+
+            for(const auto& m : matches) {
+                Pt pMP = pts[m.trainIdx];
+                if(!pMP || (pMP->isBad()))
+                    continue;
+                
+                int ptIdx = toBeMatched.at(ft)[m.queryIdx];
+                if(frame.pts.at(ft)[ptIdx])
+                    if(frame.pts.at(ft)[ptIdx]->NumberOfObservations() > 0)
+                        continue;
+
+                float radiusTh = 3.0f;
+                const float predictedSize = pMP->trackSize;
+                float r = radiusScale * radiusTh *  RadiusByViewingCos(pMP->trackViewCos) * predictedSize;
+
+                const vector<size_t> vIndices = frame.GetFeaturesInArea(pMP->mTrackProjX,pMP->mTrackProjY, r,
+                                    (pMP->trackSize / frame.sizeTolerance),(pMP->trackSize * frame.sizeTolerance), ft);
+                if(vIndices.empty())
+                    continue;
+                for (const auto& idx : vIndices){
+                    if(idx == ptIdx){
+                        frame.pts.at(ft)[ptIdx] = pMP;
+                        auto itMap = toBeMatched.find(ft);
+                        if (itMap != toBeMatched.end()) {
+                            auto& indices = itMap->second;
+                            indices.erase(std::remove(indices.begin(), indices.end(), m.queryIdx), indices.end());
+                            for (auto& idx : indices) {
+                                if (idx > m.queryIdx) {
+                                    idx--;
+                                }
+                            }
+                        }
+                        //alreadyMatched.at(ft).erase(std::remove(alreadyMatched.at(ft).begin(), alreadyMatched.at(ft).end(), m.queryIdx), alreadyMatched.at(ft).end());
+                        frameDescriptors.at(ft).row(m.queryIdx).release();
+                        //std::cout << "already matched = "<< alreadyMatched.at(ft).size() << std::endl;
+                        numMatches++;
+                        numMachedPoints.back()++;
+                        break;
+                    }
+                }
+                if (toBeMatched.at(ft).empty())
+                    break;
+                if (numMachedPoints.size() > 1){
+                    if (numMachedPoints.back() == 0 && numMachedPoints[numMachedPoints.size() - 2] == 0){
+                        break;
+                    }
+                }
+
+                // frame.pts.at(ft)[m.queryIdx] = pMP;
+                // numMatches++;
+            }
+        }
+    }
+    return numMatches;
+        
+}
+
 int FeatureMatcher::SearchByProjection(Frame &F, const vector<Pt> &vpMapPoints, const float& radiusTh)
 {
     int nmatches=0;
@@ -194,8 +299,8 @@ int FeatureMatcher::SearchByBoW(const Keyframe& keyframe, const Frame &frame, ve
     if (it1 == keyframe->mDescriptors.end() || it2 == frame.mDescriptors.end()) 
         return 0; 
     
-    std::vector<cv::DMatch> matches;
-    cv::BFMatcher(cv::NORM_HAMMING, true).match(keyframe->mDescriptors.at(featType), frame.mDescriptors.at(featType), matches);
+    std::vector<cv::DMatch> matches = featureMatching(keyframe->mDescriptors.at(featType), frame.mDescriptors.at(featType), featType);
+    //cv::BFMatcher(getNormType(featType), true).match(keyframe->mDescriptors.at(featType), frame.mDescriptors.at(featType), matches);
 
     mapPointMatches = vector<Pt>(frame.N.at(featType), static_cast<Pt>(NULL));
     const vector<Pt> mapPointsKF = keyframe->GetMapPointMatches(featType);
@@ -491,6 +596,7 @@ int FeatureMatcher::SearchForInitialization(Frame &F1, Frame &F2, vector<cv::Poi
         }
 
     }
+    std::cout << "Initial matches found: " << nMatches << std::endl;
 
     if(mbCheckOrientation)
         filterMatchesWithOrientation(rotHist,vnMatches12,nMatches);
@@ -618,8 +724,8 @@ int FeatureMatcher::SearchForTriangulation(const Keyframe& keyframe1, const Keyf
     if (it1 == keyframe1->mDescriptors.end() || it2 == keyframe2->mDescriptors.end()) 
         return 0; 
     
-    std::vector<cv::DMatch> matches;
-    cv::BFMatcher(cv::NORM_HAMMING, true).match(keyframe1->mDescriptors.at(featType), keyframe2->mDescriptors.at(featType), matches);
+    std::vector<cv::DMatch> matches = featureMatching(keyframe1->mDescriptors.at(featType), keyframe2->mDescriptors.at(featType), featType);
+    //cv::BFMatcher(getNormType(featType), false).match(keyframe1->mDescriptors.at(featType), keyframe2->mDescriptors.at(featType), matches);
 
     matchedPairs.reserve(matches.size());
     for(const auto& m : matches) {
@@ -1256,8 +1362,8 @@ int FeatureMatcher::SearchByProjection(Frame &CurrentFrame, const Frame &LastFra
     if (it1 == CurrentFrame.mDescriptors.end() || it2 == LastFrame.mDescriptors.end()) 
         return 0; 
     
-    std::vector<cv::DMatch> matches;
-    cv::BFMatcher(cv::NORM_HAMMING, true).match(CurrentFrame.mDescriptors.at(featType), LastFrame.mDescriptors.at(featType), matches);
+    std::vector<cv::DMatch> matches = featureMatching(CurrentFrame.mDescriptors.at(featType), LastFrame.mDescriptors.at(featType), featType);
+    //cv::BFMatcher(getNormType(featType), true).match(CurrentFrame.mDescriptors.at(featType), LastFrame.mDescriptors.at(featType), matches);
 
     int numMatches = 0;
     for(const auto& m : matches) {
@@ -1513,19 +1619,46 @@ Descriptor_Distance_Type FeatureMatcher::DescriptorDistance(const cv::Mat &a, co
     }
 }
 
+cv::NormTypes FeatureMatcher::getNormType(const FeatureType& featureType_){
+    switch(featureType_) {
+        case FEAT_ANYFEATNONBIN:
+            return cv::NORM_L2;
+        case FEAT_ANYFEATBIN:
+            return cv::NORM_HAMMING;
+        case FEAT_R2D2:
+            return cv::NORM_L2;
+        case FEAT_SIFT128:
+            return cv::NORM_L2;
+        case FEAT_KAZE64:
+            return cv::NORM_L2;
+        case FEAT_SURF64:
+            return cv::NORM_L2;
+        case FEAT_BRISK:
+            return cv::NORM_HAMMING;
+        case FEAT_AKAZE61:
+            return cv::NORM_HAMMING;
+        case FEAT_ORB:
+            return cv::NORM_HAMMING;
+    }
+}
+
 void FeatureMatcher::setDescriptorDistanceThresholds(const string &feature_settings_yaml_file) {
 // #ifdef VANILLA_ORB_SLAM2
-        return;
+        //return;
 // #endif
     cv::FileStorage fSettings(feature_settings_yaml_file, cv::FileStorage::READ);
-    const float matchingTh = fSettings["FeatureMatcher.matchingTh"];
+    //const float matchingTh = fSettings["FeatureMatcher.matchingTh"];
     cout << endl  << "Loading Feature Matcher Settings from : " << feature_settings_yaml_file << endl;
-    cout <<  "- matchingTh: " << matchingTh << endl;
-    FeatureMatcher::TH_LOW = matchingTh;
-    FeatureMatcher::TH_HIGH = FeatureMatcher::TH_LOW;
-    FeatureMatcher::descDistTh_low_reloc = FeatureMatcher::TH_LOW;
-    FeatureMatcher::descDistTh_high_reloc = FeatureMatcher::TH_LOW;
+    FeatureMatcher::TH_LOW = fSettings["FeatureMatcher.TH_LOW"];
+    FeatureMatcher::TH_HIGH = fSettings["FeatureMatcher.TH_HIGH"];
+    FeatureMatcher::descDistTh_low_reloc = fSettings["FeatureMatcher.descDistTh_high_reloc"];
+    FeatureMatcher::descDistTh_high_reloc = fSettings["FeatureMatcher.descDistTh_low_reloc"];
+    cout <<  "- TH_LOW: " << FeatureMatcher::TH_LOW << endl;
+    cout <<  "- TH_HIGH: " << FeatureMatcher::TH_HIGH << endl;
+    cout <<  "- descDistTh_low_reloc: " << FeatureMatcher::descDistTh_low_reloc << endl;
+    cout <<  "- descDistTh_high_reloc: " << FeatureMatcher::descDistTh_high_reloc << endl;
 }
+
 void FeatureMatcher::setDescriptorDistanceThresholds(const std::vector<Descriptor_Distance_Type>& descriptorDistances_,
                                                      const std::vector<int>& numCandidates_,const DescriptorType& descriptorType){
     // #ifdef VANILLA_ORB_SLAM2
@@ -1648,5 +1781,70 @@ void FeatureMatcher::setDescriptorDistanceThresholds(const std::vector<Descripto
         {
             ind3=-1;
         }
+    }
+
+    std::vector<cv::DMatch> FeatureMatcher::featureMatching(const cv::Mat& desc1, const cv::Mat& desc2, const FeatureType& ft){
+        std::vector<cv::DMatch> matches;
+        switch(ft) {
+            case FEAT_ANYFEATNONBIN:
+                cv::BFMatcher(getNormType(ft), true).match(desc1, desc2, matches);
+            case FEAT_ANYFEATBIN:
+                cv::BFMatcher(getNormType(ft), true).match(desc1, desc2, matches);
+            case FEAT_R2D2:
+                cv::BFMatcher(getNormType(ft), true).match(desc1, desc2, matches);
+            case FEAT_SIFT128:
+                {
+                    // cv::Ptr<cv::DescriptorMatcher> matcher = cv::BFMatcher::create(cv::NORM_L2);
+                    // std::vector<std::vector<cv::DMatch>> knn_matches;
+                    // matcher->knnMatch(desc1, desc2, knn_matches, 2);
+                    // const float ratio_thresh = 0.7f;
+                    // std::vector<cv::DMatch> matches;
+                    // for (size_t i = 0; i < knn_matches.size(); i++) {
+                    //     if (knn_matches[i].size() > 1 && 
+                    //         knn_matches[i][0].distance < ratio_thresh * knn_matches[i][1].distance) {
+                    //         matches.push_back(knn_matches[i][0]);
+                    //     }
+                    // }
+
+                    // SiftMatchGPU sift_match_gpu_ = SiftMatchGPU();
+                    // sift_match_gpu_.SetLanguage(SiftMatchGPU::SIFTMATCH_CUDA);
+
+                    // if (sift_match_gpu_.VerifyContextGL() == 0) {
+                    //     std::cout << "Initialization failed!" << std::endl;
+                    // }
+                    // int max_supported = std::max(desc1.rows, desc2.rows);
+                    // sift_match_gpu_ .Allocate(max_supported, 1);
+
+                    sift_match_gpu_.SetDescriptors(0, desc1.rows, desc1.ptr<float>());
+                    sift_match_gpu_.SetDescriptors(1, desc2.rows, desc2.ptr<float>());
+
+                    const int max_out = 4000;
+                    uint32_t (*match_buffer)[2] = new uint32_t[max_out][2];
+
+                    int num_matches = sift_match_gpu_.GetSiftMatch(max_out, match_buffer, 0.7f, 0.8f, 1);
+                    //std::cout << "Number of matches found by SiftMatchGPU: " << num_matches << std::endl;
+
+                    matches.clear();
+                    matches.reserve(num_matches);
+                    for (int i = 0; i < num_matches; ++i) {
+                        matches.emplace_back(
+                            static_cast<int>(match_buffer[i][0]), 
+                            static_cast<int>(match_buffer[i][1]), 
+                            0.0f);
+                    }
+                    delete[] match_buffer;
+                }
+            case FEAT_KAZE64:
+                cv::BFMatcher(getNormType(ft), true).match(desc1, desc2, matches);
+            case FEAT_SURF64:
+                cv::BFMatcher(getNormType(ft), true).match(desc1, desc2, matches);
+            case FEAT_BRISK:
+                cv::BFMatcher(getNormType(ft), true).match(desc1, desc2, matches);
+            case FEAT_AKAZE61:
+                cv::BFMatcher(getNormType(ft), true).match(desc1, desc2, matches);
+            case FEAT_ORB:
+                cv::BFMatcher(getNormType(ft), true).match(desc1, desc2, matches);
+        }
+        return matches;
     }
     } //namespace ORB_SLAM

@@ -293,6 +293,7 @@ void ANYFEATURE_VSLAM::FeatureExtractor::filterKeypoints_notScaled(std::map<int,
         std::vector<cv::KeyPoint> keypoints_filtered = DistributeOctTree(keypoints_, 0, w, 0, h, mnFeaturesPerLevel[level], level);
         //cout << "nFeaturesPerLevel[level] = " << keypoints_filtered.size() << " / " << mnFeaturesPerLevel[level] << " / " << keypoints_.size() << endl;
         keypoints_level[level] = keypoints_filtered;
+        //keypoints_level[level] = keypoints_;
     }
 }
 
