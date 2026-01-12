@@ -68,8 +68,9 @@ public:
         const DescriptorType& descriptorType, const FeatureType& featureType);
 
     // Matching to triangulate new MapPoints. Check Epipolar Constraint.
-    int SearchForTriangulation(Keyframe pKF1, Keyframe pKF2, const mat3f& F12,
-                               std::vector<pair<size_t, size_t> > &vMatchedPairs, const DescriptorType& descriptorType, const FeatureType& featureType);
+    int SearchForTriangulation(const Keyframe& keyframe1, const Keyframe& keyframe2, const mat3f& F12,
+                               std::vector<pair<size_t, size_t> > &matchedPairs, 
+                               const FeatureType& featureType);
 
     // Search matches between MapPoints seen in KF1 and KF2 transforming by a Sim3 [s12*R12|t12]
     // In the stereo and RGB-D case, s12=1

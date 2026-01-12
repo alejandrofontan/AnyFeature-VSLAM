@@ -290,13 +290,14 @@ void LocalMapping::CreateNewMapPoints()
 
         // Compute Fundamental Matrix
         mat3f F12 = ComputeF12(mpCurrentKeyFrame, pKF2);
+
         // Search matches that fullfil epipolar constraint
         std::map<FeatureType, vector<pair<size_t,size_t>>> vMatchedIndices;
         
         for(auto& [featureType, N_]: pKF2->N){
             const KeypointType keypointType = GetKeypointType(featureType);
             const DescriptorType descriptorType = GetDescriptorType(featureType);
-            matcher.SearchForTriangulation(mpCurrentKeyFrame, pKF2, F12, vMatchedIndices[featureType], descriptorType, featureType);
+            matcher.SearchForTriangulation(mpCurrentKeyFrame, pKF2, F12, vMatchedIndices[featureType], featureType);
             std::cout << "Found " << vMatchedIndices[featureType].size() << " matches for triangulation in feature " << featureType << std::endl;
         
             // Triangulate each match

@@ -586,21 +586,23 @@ int FeatureMatcher::SearchByBoW(Keyframe pKF1, Keyframe pKF2, vector<Pt > &vpMat
     return nMatches;
 }
 
-int FeatureMatcher::SearchForTriangulation(Keyframe pKF1, Keyframe pKF2, const mat3f& F12,
-                                           vector<pair<size_t, size_t> > &vMatchedPairs, 
-                                           const DescriptorType& descriptorType, const FeatureType& featType)
-{    
+int FeatureMatcher::SearchForTriangulation(const Keyframe& keyframe1, const Keyframe& keyframe2, const mat3f& F12,
+                                           vector<pair<size_t, size_t> > &matchedPairs, 
+                                           const FeatureType& featType){    
+    matchedPairs.clear();
 
-    std::vector<cv::DMatch> cvMatches;
-    cv::BFMatcher(cv::NORM_HAMMING, true).match(pKF1->mDescriptors.at(featType), pKF2->mDescriptors.at(featType), cvMatches);
-    vMatchedPairs.clear();
-    for(const auto& m : cvMatches) {
-        // Optional: Keep the triangulation logic check for MapPoints
-        if(!pKF1->GetMapPoint(m.queryIdx, featType) && !pKF2->GetMapPoint(m.trainIdx, featType)) {
-            vMatchedPairs.push_back({(size_t)m.queryIdx, (size_t)m.trainIdx});
+    std::vector<cv::DMatch> matches;
+    cv::BFMatcher(cv::NORM_HAMMING, true).match(keyframe1->mDescriptors.at(featType), keyframe2->mDescriptors.at(featType), matches);
+
+    matchedPairs.reserve(matches.size());
+    for(const auto& m : matches) {
+        // Only triangulate points that don't already have a 3D MapPoint
+        if(!keyframe1->GetMapPoint(m.queryIdx, featType) && !keyframe2->GetMapPoint(m.trainIdx, featType)){
+            matchedPairs.emplace_back(static_cast<size_t>(m.queryIdx), static_cast<size_t>(m.trainIdx));        
         }
     }
-    return vMatchedPairs.size();
+
+    return matchedPairs.size();
 
     // const DBoW2::FeatureVector &vFeatVec1 = pKF1->mFeatVec;
     // const DBoW2::FeatureVector &vFeatVec2 = pKF2->mFeatVec;
