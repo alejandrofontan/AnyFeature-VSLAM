@@ -625,11 +625,6 @@ void Tracking::CheckReplacedInLastFrame()
 
 bool Tracking::TrackReferenceKeyFrame()
 {   
-    FeatureType featureType = featureTypes[featureTrackRefKey];
-
-    // Compute Bag of Words vector
-    currentFrame.ComputeBoW(featureTypes[featureTrackRefKey]);
-
     // We perform first an ORB matching with the reference keyframe
     // If enough matches are found we set up a PnP solver
     FeatureMatcher matcher(nnratio_trackRefKey, true);
@@ -746,7 +741,6 @@ void Tracking::UpdateLastFrame()
 
 bool Tracking::TrackWithMotionModel()
 {
-    FeatureType featureType = featureTypes[featureTrackWithMotionModel];
 
     FeatureMatcher matcher(nnratio_trackMotModel, true);
 
@@ -776,10 +770,12 @@ bool Tracking::TrackWithMotionModel()
 
     // If few matches, uses a wider window search
     if(nmatches < minMatches_trackMotModel_high)
-    {
-        fill(currentFrame.pts.at(featureType).begin(),currentFrame.pts.at(featureType).end(),static_cast<Pt>(nullptr));
-        nmatches = matcher.SearchByProjection(currentFrame,lastFrame, radiusTh_scale_trackMotModel * radiusTh, 
-            mSensor==System::MONOCULAR, featureType);
+    {   
+        for (auto& [ft, N] : currentFrame.N) {
+            fill(currentFrame.pts.at(ft).begin(),currentFrame.pts.at(ft).end(),static_cast<Pt>(nullptr));
+            nmatches = matcher.SearchByProjection(currentFrame,lastFrame, radiusTh_scale_trackMotModel * radiusTh, 
+                mSensor==System::MONOCULAR, ft);
+        }
     }
 
     if(nmatches < minMatches_trackMotModel_high)
@@ -1021,16 +1017,17 @@ bool Tracking::TrackLocalMap()
     void Tracking::SearchLocalPoints()
     {   
         // Do not search map points already matched
-        for(auto& pt: currentFrame.pts.at(featureTypes[featureSearchLocalPoints])){
-            if(pt && !pt->isBad()){
-                pt->IncreaseVisible();
-                pt->idLastFrameSeen = currentFrame.mnId;
-                pt->mbTrackInView = false;
+        for (const auto& [ft, N] : currentFrame.N) {
+            for(auto& pt: currentFrame.pts.at(ft)){
+                if(pt && !pt->isBad()){
+                    pt->IncreaseVisible();
+                    pt->idLastFrameSeen = currentFrame.mnId;
+                    pt->mbTrackInView = false;
+                }
+                else
+                    pt = nullptr;
             }
-            else
-                pt = nullptr;
         }
-
         // Project points in frame and check its visibility
         int nToMatch=0;
         for(auto& pt: localPts){

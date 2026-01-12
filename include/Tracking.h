@@ -121,13 +121,10 @@ public:
     void Reset();
 
     size_t numTrackedFrames{2};
+
     vector<FeatureType> featureTypes{};
     int featureInitialization{0};
     int featureRelocalization{0};
-    int featureTrackRefKey{0};
-    int featureTrackWithMotionModel{0};
-    int featureSearchLocalPoints{0};
-    int featureGetFeatureExtractor{0};
 
 protected:
 
