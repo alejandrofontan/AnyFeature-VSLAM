@@ -54,6 +54,9 @@ std::string ANYFEATURE_VSLAM::keypointName(const KeypointType & keypointType){
 std::string ANYFEATURE_VSLAM::descriptorName(const DescriptorType& descriptorType){
     switch (descriptorType) {
         // descriptor name
+        case DESC_ALIKED128:{
+            return "Aliked128";
+        }
         case DESC_ANYFEATNONBIN:{
             return "AnyFeatNonBin";
         }
@@ -87,6 +90,9 @@ std::string ANYFEATURE_VSLAM::descriptorName(const DescriptorType& descriptorTyp
 std::string ANYFEATURE_VSLAM::featureName(const FeatureType& featureType){
     switch (featureType) {
         // feature name
+        case FEAT_ALIKED128:{
+            return "aliked128";
+        }
         case FEAT_ANYFEATNONBIN:{
             return "anyFeatNonBin";
         }
@@ -140,6 +146,10 @@ cv::Scalar ANYFEATURE_VSLAM::getFeatureColor(const FeatureType& featureType, con
     Eigen::Matrix<int,3,1> color{0,0,0};
     switch(featureType) {
         // descriptor color
+        case FEAT_ALIKED128:{
+            color << 255 , 255, 122;
+            break;
+        }
         case FEAT_ANYFEATNONBIN:{
             color << 122 , 255, 122;
             break;

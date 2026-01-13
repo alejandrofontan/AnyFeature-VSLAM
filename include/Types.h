@@ -9,6 +9,7 @@
 #include <iostream>
 
 enum KeypointType {
+    KEYP_ALIKED128 = 9,
     KEYP_ANYFEATNONBIN = 8,
     KEYP_ANYFEATBIN = 7,
     KEYP_R2D2 = 6,
@@ -21,6 +22,7 @@ enum KeypointType {
 };
 
 enum DescriptorType {
+    DESC_ALIKED128 = 9,
     DESC_ANYFEATNONBIN = 8,
     DESC_ANYFEATBIN = 7,
     DESC_R2D2 = 6,
@@ -33,6 +35,7 @@ enum DescriptorType {
 };
 
 enum FeatureType {
+    FEAT_ALIKED128 = 9,
     FEAT_ANYFEATNONBIN = 8,
     FEAT_ANYFEATBIN = 7,
     FEAT_R2D2 = 6,
@@ -46,6 +49,8 @@ enum FeatureType {
 
 inline KeypointType GetKeypointType(const FeatureType& featureType){
     switch (featureType) { // GetKeypointType
+        case FEAT_ALIKED128:
+            return KEYP_ALIKED128;
         case FEAT_ANYFEATNONBIN:
             return KEYP_ANYFEATNONBIN;
         case FEAT_ANYFEATBIN:
@@ -74,6 +79,8 @@ inline KeypointType GetKeypointType(const FeatureType& featureType){
 
 inline DescriptorType GetDescriptorType(const FeatureType& featureType){
     switch (featureType) { // GetDescriptorType
+        case FEAT_ALIKED128:
+            return DESC_ALIKED128;
         case FEAT_ANYFEATNONBIN:
             return DESC_ANYFEATNONBIN;
         case FEAT_ANYFEATBIN:
@@ -118,6 +125,8 @@ inline int get_feature_id(const std::string& str) {
         return 7;
     } else if (str == "anyfeatnonbin") {
         return 8;
+    } else if (str == "aliked128") {
+        return 9;
     } else {
         return 0;
     }

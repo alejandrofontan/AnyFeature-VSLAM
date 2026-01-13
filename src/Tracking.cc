@@ -48,6 +48,7 @@
 #include"Feature_r2d2_128.h"
 #include"Feature_anyFeatBin.h"
 #include"Feature_anyFeatNonBin.h"
+#include"Feature_aliked128.h"
 
 using namespace std;
 
@@ -1550,6 +1551,9 @@ shared_ptr<FeatureExtractor> Tracking::getFeatureExtractor(const int& scaleNumFe
 
     shared_ptr<FeatureExtractorSettings> extractorSettings = make_shared<FeatureExtractorSettings>(keypointType, descriptorType, featureSettingsYamlFile);
     switch (keypointType) {
+        case KEYP_ALIKED128:{
+            return std::make_shared<FeatureExtractor_aliked128>(numFeatures,extractorSettings);
+        }
         case KEYP_ANYFEATNONBIN:{
             return std::make_shared<FeatureExtractor_anyFeatNonBin>(numFeatures,extractorSettings);
         }

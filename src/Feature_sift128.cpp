@@ -48,7 +48,7 @@ ANYFEATURE_VSLAM::FeatureExtractor_sift128::FeatureExtractor_sift128(const int &
 
     // Edge Threshold (default : 10.0)
     sift_gpu_args.push_back("-e");
-    sift_gpu_args.push_back(std::to_string(10.0));
+    sift_gpu_args.push_back(std::to_string(settings->detectTh));
 
      // Maximum number of orientations.
     sift_gpu_args.push_back("-mo");

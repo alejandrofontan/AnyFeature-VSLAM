@@ -37,18 +37,18 @@ ANYFEATURE_VSLAM::FeatureExtractorSettings::FeatureExtractorSettings(
     nOctaves = GetDetectorNominalNumOctaves();
     detectTh = GetDetectorNominalThreshold();
 
-    if (keypointType == KEYP_ORB && descriptorType == DESC_ORB){
+    // if (keypointType == KEYP_ORB && descriptorType == DESC_ORB){
+    //     ON_automaticTuning = false;
+    //     scaleFactor = 1.2f;
+    //     nOctaves = 8;
+    //     iniThFAST = 20;
+    //     minThFAST = 7;
+    //     detectTh = float(iniThFAST);
+    // }else{
         ON_automaticTuning = false;
-        scaleFactor = 1.2f;
-        nOctaves = 8;
         iniThFAST = 20;
         minThFAST = 7;
-        detectTh = float(iniThFAST);
-    }else{
-        ON_automaticTuning = true;
-        iniThFAST = 20;
-        minThFAST = 7;
-    }
+    // }
 // #ifdef VANILLA_ORB_SLAM2
     // ON_automaticTuning = false;
     // scaleFactor = 1.2f;

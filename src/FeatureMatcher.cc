@@ -31,6 +31,7 @@
 #include "Feature_r2d2_128.h"
 #include "Feature_anyFeatBin.h"
 #include "Feature_anyFeatNonBin.h"
+#include "Feature_aliked128.h"
 
 #include<limits.h>
 
@@ -41,6 +42,16 @@
 
 #include<stdint-gcc.h>
 #include <memory>
+
+// #include "feature/ALIKED.hpp"
+// #include "matcher/lightglue/matcher.hpp"
+// #include <opencv2/opencv.hpp>
+// #include <torch/torch.h>
+
+// #include <string>
+// #include <iostream>
+// #include <chrono>
+
 
 using namespace std;
 
@@ -302,7 +313,8 @@ int FeatureMatcher::SearchByBoW(const Keyframe& keyframe, const Frame &frame, ve
         return 0; 
     
     std::vector<cv::DMatch> matches = featureMatching(keyframe->mDescriptors.at(featType), frame.mDescriptors.at(featType), featType);
-    //cv::BFMatcher(getNormType(featType), true).match(keyframe->mDescriptors.at(featType), frame.mDescriptors.at(featType), matches);
+    //std::vector<cv::DMatch> matches = featureMatching(keyframe->mDescriptors.at(featType), frame.mDescriptors.at(featType),
+    //    keyframe->mvKeysUn.at(featType), frame.mvKeysUn.at(featType), featType);
 
     mapPointMatches = vector<Pt>(frame.N.at(featType), static_cast<Pt>(NULL));
     const vector<Pt> mapPointsKF = keyframe->GetMapPointMatches(featType);
@@ -727,6 +739,8 @@ int FeatureMatcher::SearchForTriangulation(const Keyframe& keyframe1, const Keyf
         return 0; 
     
     std::vector<cv::DMatch> matches = featureMatching(keyframe1->mDescriptors.at(featType), keyframe2->mDescriptors.at(featType), featType);
+    //std::vector<cv::DMatch> matches = featureMatching(keyframe1->mDescriptors.at(featType), keyframe2->mDescriptors.at(featType), 
+    //keyframe1->mvKeysUn.at(featType), keyframe2->mvKeysUn.at(featType), featType);
 
     matchedPairs.reserve(matches.size());
     for(const auto& m : matches) {
@@ -1248,7 +1262,9 @@ int FeatureMatcher::SearchByProjection(Frame &CurrentFrame, const Frame &LastFra
         return 0; 
     
     std::vector<cv::DMatch> matches = featureMatching(CurrentFrame.mDescriptors.at(featType), LastFrame.mDescriptors.at(featType), featType);
-    //cv::BFMatcher(getNormType(featType), true).match(CurrentFrame.mDescriptors.at(featType), LastFrame.mDescriptors.at(featType), matches);
+    //std::vector<cv::DMatch> matches = featureMatching(CurrentFrame.mDescriptors.at(featType), LastFrame.mDescriptors.at(featType), 
+         //CurrentFrame.mvKeysUn.at(featType), LastFrame.mvKeysUn.at(featType), featType);
+
 
     int numMatches = 0;
     for(const auto& m : matches) {
@@ -1483,6 +1499,8 @@ Descriptor_Distance_Type FeatureMatcher::DescriptorDistance(const cv::Mat &a, co
 {
     switch(descriptorType_) {
         // DescriptorDistance
+        case DESC_ALIKED128:
+             return DescriptorDistance_aliked128(a,b);
         case DESC_ANYFEATNONBIN:
             return DescriptorDistance_anyFeatureNonBin(a,b);
         case DESC_ANYFEATBIN:
@@ -1506,6 +1524,8 @@ Descriptor_Distance_Type FeatureMatcher::DescriptorDistance(const cv::Mat &a, co
 
 cv::NormTypes FeatureMatcher::getNormType(const FeatureType& featureType_){
     switch(featureType_) {
+        case FEAT_ALIKED128:
+            return cv::NORM_L2;
         case FEAT_ANYFEATNONBIN:
             return cv::NORM_L2;
         case FEAT_ANYFEATBIN:
@@ -1671,6 +1691,9 @@ void FeatureMatcher::setDescriptorDistanceThresholds(const std::vector<Descripto
     std::vector<cv::DMatch> FeatureMatcher::featureMatching(const cv::Mat& desc1, const cv::Mat& desc2, const FeatureType& ft){
         std::vector<cv::DMatch> matches;
         switch(ft) {
+            case FEAT_ALIKED128:
+                bf_matcher_L2.match(desc1, desc2, matches);
+                break;
             case FEAT_ANYFEATNONBIN:
                 bf_matcher_L2.match(desc1, desc2, matches);
                 break;
@@ -1682,28 +1705,6 @@ void FeatureMatcher::setDescriptorDistanceThresholds(const std::vector<Descripto
                 break;
             case FEAT_SIFT128:
                 {
-                    // cv::Ptr<cv::DescriptorMatcher> matcher = cv::BFMatcher::create(cv::NORM_L2);
-                    // std::vector<std::vector<cv::DMatch>> knn_matches;
-                    // matcher->knnMatch(desc1, desc2, knn_matches, 2);
-                    // const float ratio_thresh = 0.7f;
-                    // std::vector<cv::DMatch> matches;
-                    // for (size_t i = 0; i < knn_matches.size(); i++) {
-                    //     if (knn_matches[i].size() > 1 && 
-                    //         knn_matches[i][0].distance < ratio_thresh * knn_matches[i][1].distance) {
-                    //         matches.push_back(knn_matches[i][0]);
-                    //     }
-                    // }
-
-                    // SiftMatchGPU sift_match_gpu_ = SiftMatchGPU();
-                    // sift_match_gpu_.SetLanguage(SiftMatchGPU::SIFTMATCH_CUDA);
-
-                    // if (sift_match_gpu_.VerifyContextGL() == 0) {
-                    //     std::cout << "Initialization failed!" << std::endl;
-                    // }
-                    // int max_supported = std::max(desc1.rows, desc2.rows);
-                    // sift_match_gpu_ .Allocate(max_supported, 1);
-
-                    std::cout << "Allocating SiftMatchGPU with max_supported = " << std::endl;
                     sift_match_gpu_.SetDescriptors(0, desc1.rows, desc1.ptr<float>());
                     sift_match_gpu_.SetDescriptors(1, desc2.rows, desc2.ptr<float>());
 
@@ -1711,7 +1712,6 @@ void FeatureMatcher::setDescriptorDistanceThresholds(const std::vector<Descripto
                     uint32_t (*match_buffer)[2] = new uint32_t[max_out][2];
 
                     int num_matches = sift_match_gpu_.GetSiftMatch(max_out, match_buffer, 0.7f, 0.8f, 1);
-                    //std::cout << "Number of matches found by SiftMatchGPU: " << num_matches << std::endl;
 
                     matches.clear();
                     matches.reserve(num_matches);
@@ -1722,7 +1722,6 @@ void FeatureMatcher::setDescriptorDistanceThresholds(const std::vector<Descripto
                             0.0f);
                     }
                     delete[] match_buffer;
-                    std::cout << "Allocating SiftMatchGPU with max_supported 2= " << std::endl;
                     break;
                 }
             case FEAT_KAZE64:
@@ -1743,4 +1742,182 @@ void FeatureMatcher::setDescriptorDistanceThresholds(const std::vector<Descripto
         }
         return matches;
     }
+
+
+    // using FeatDict = c10::Dict<std::string, at::Tensor>;
+
+    // static at::Tensor kps_to_tensor_N2(const std::vector<cv::KeyPoint>& kps, torch::Device device) {
+    //     const int64_t N = (int64_t)kps.size();
+    //     at::Tensor t = torch::empty({N, 2}, torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU));
+    //     auto a = t.accessor<float, 2>();
+    //     for (int64_t i = 0; i < N; ++i) {
+    //         a[i][0] = kps[(size_t)i].pt.x;
+    //         a[i][1] = kps[(size_t)i].pt.y;
+    //     }
+    //     return t.to(device);
+    // }
+
+    // static at::Tensor desc_to_tensor_ND(const cv::Mat& desc, torch::Device device) {
+    //     CV_Assert(desc.type() == CV_32F);
+    //     cv::Mat d = desc.isContinuous() ? desc : desc.clone();
+
+    //     const int64_t N = d.rows;
+    //     const int64_t D = d.cols;
+
+    //     // from_blob is a view; clone() makes it independent of cv::Mat memory
+    //     at::Tensor t = torch::from_blob(
+    //         (void*)d.ptr<float>(),
+    //         {N, D},
+    //         torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU)
+    //     ).clone();
+
+    //     return t.to(device);
+    // }
+        
+    // static FeatDict make_feats_like_aliked(
+    //     const std::vector<cv::KeyPoint>& kps,
+    //     const cv::Mat& desc,
+    //     int width, int height,
+    //     torch::Device device
+    // ) {
+    //     FeatDict f;
+    //     f.insert("keypoints", kps_to_tensor_N2(kps, device));          // [N,2]
+    //     f.insert("descriptors", desc_to_tensor_ND(desc, device));      // [N,D]
+    //     f.insert("image_size",
+    //             torch::tensor({(float)width, (float)height}, torch::TensorOptions().dtype(torch::kFloat32))
+    //                 .unsqueeze(0).to(device));                       // [1,2]
+    //     return f;
+    // }
+
+    // static std::vector<cv::DMatch> lightglue_to_dmatches(
+    //     const at::Tensor& matches0,                 // matches01.at("matches0")
+    //     const at::Tensor* matching_scores0 = nullptr, // &matches01.at("matching_scores0") or nullptr
+    //     float min_score = 0.0f
+    // ) {
+    //     // Move to CPU + contiguous
+    //     at::Tensor m = matches0.to(at::kCPU).contiguous();
+    //     if (m.dim() == 2) m = m.squeeze(0); // [N0]
+    //     TORCH_CHECK(m.dim() == 1, "matches0 must be [N0] or [1,N0]");
+    //     m = m.to(at::kLong);                // ensure int64
+
+    //     at::Tensor s;
+    //     bool has_scores = (matching_scores0 != nullptr);
+    //     if (has_scores) {
+    //         s = matching_scores0->to(at::kCPU).contiguous();
+    //         if (s.dim() == 2) s = s.squeeze(0);     // [N0]
+    //         TORCH_CHECK(s.dim() == 1, "matching_scores0 must be [N0] or [1,N0]");
+    //         s = s.to(at::kFloat);                   // ensure float
+    //         TORCH_CHECK(s.size(0) == m.size(0), "scores length must match matches0 length");
+    //     }
+
+    //     auto m_acc = m.accessor<int64_t, 1>();
+    //     const int64_t N0 = m.size(0);
+
+    //     std::vector<cv::DMatch> out;
+    //     out.reserve((size_t)N0);
+
+    //     if (has_scores) {
+    //         auto s_acc = s.accessor<float, 1>();
+    //         for (int64_t i = 0; i < N0; ++i) {
+    //             int64_t j = m_acc[i];
+    //             if (j < 0) continue;
+
+    //             float score = s_acc[i];
+    //             if (score < min_score) continue;
+
+    //             cv::DMatch dm;
+    //             dm.queryIdx = (int)i;        // index in image0
+    //             dm.trainIdx = (int)j;        // index in image1
+    //             dm.imgIdx   = 0;
+    //             dm.distance = 1.0f - score;  // OpenCV uses smaller-is-better distance
+    //             out.push_back(dm);
+    //         }
+    //     } else {
+    //         for (int64_t i = 0; i < N0; ++i) {
+    //             int64_t j = m_acc[i];
+    //             if (j < 0) continue;
+
+    //             cv::DMatch dm;
+    //             dm.queryIdx = (int)i;
+    //             dm.trainIdx = (int)j;
+    //             dm.imgIdx   = 0;
+    //             dm.distance = 0.0f;
+    //             out.push_back(dm);
+    //         }
+    //     }
+
+    //     return out;
+    // }
+
+    // std::vector<cv::DMatch> FeatureMatcher::featureMatching(const cv::Mat& desc1, const cv::Mat& desc2, 
+    //     const std::vector<cv::KeyPoint>& keypoints1, const std::vector<cv::KeyPoint>& keypoints2,
+    //     const FeatureType& ft){
+
+    //     std::vector<cv::DMatch> matches;
+    //     switch(ft) {
+    //         case FEAT_ALIKED128:{
+    //             torch::Device device = torch::cuda::is_available() ? torch::kCUDA : torch::kCPU;
+    //             auto matcher_lightglue = std::make_shared<matcher::LightGlue>();
+    //             matcher_lightglue->to(device);
+
+    //             FeatDict f0 = make_feats_like_aliked(keypoints1, desc1, 739, 458, device);
+    //             FeatDict f1 = make_feats_like_aliked(keypoints2, desc2, 739, 458, device);
+
+    //             auto matches01 = matcher_lightglue->forward(f0, f1);
+    //             const auto& matches0 = matches01.at("matches0");
+    //             const auto& scores0  = matches01.at("matching_scores0");
+
+    //             matches = lightglue_to_dmatches(matches0, &scores0, 0.1f);    
+    //             std::cout << "LightGlue found " << matches.size() << " matches." << std::endl;
+    //             break;
+    //         }
+    //         case FEAT_ANYFEATNONBIN:
+    //             bf_matcher_L2.match(desc1, desc2, matches);
+    //             break;
+    //         case FEAT_ANYFEATBIN:
+    //             bf_matcher_hamming.match(desc1, desc2, matches);
+    //             break;
+    //         case FEAT_R2D2:
+    //             bf_matcher_L2.match(desc1, desc2, matches);
+    //             break;
+    //         case FEAT_SIFT128:
+    //             {
+    //                 sift_match_gpu_.SetDescriptors(0, desc1.rows, desc1.ptr<float>());
+    //                 sift_match_gpu_.SetDescriptors(1, desc2.rows, desc2.ptr<float>());
+
+    //                 const int max_out = 4000;
+    //                 uint32_t (*match_buffer)[2] = new uint32_t[max_out][2];
+
+    //                 int num_matches = sift_match_gpu_.GetSiftMatch(max_out, match_buffer, 0.7f, 0.8f, 1);
+
+    //                 matches.clear();
+    //                 matches.reserve(num_matches);
+    //                 for (int i = 0; i < num_matches; ++i) {
+    //                     matches.emplace_back(
+    //                         static_cast<int>(match_buffer[i][0]), 
+    //                         static_cast<int>(match_buffer[i][1]), 
+    //                         0.0f);
+    //                 }
+    //                 delete[] match_buffer;
+    //                 break;
+    //             }
+    //         case FEAT_KAZE64:
+    //             bf_matcher_L2.match(desc1, desc2, matches);
+    //             break;
+    //         case FEAT_SURF64:
+    //             bf_matcher_L2.match(desc1, desc2, matches);
+    //             break;
+    //         case FEAT_BRISK:
+    //             bf_matcher_hamming.match(desc1, desc2, matches);
+    //             break;
+    //         case FEAT_AKAZE61:
+    //             bf_matcher_hamming.match(desc1, desc2, matches);
+    //             break;
+    //         case FEAT_ORB:
+    //             bf_matcher_hamming.match(desc1, desc2, matches);
+    //             break;
+    //     }
+    //     return matches;
+    // }
+
     } //namespace ORB_SLAM

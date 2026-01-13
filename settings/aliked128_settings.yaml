@@ -1,6 +1,6 @@
 %YAML:1.0
 
-# sift128 parameters
+# aliked128 parameters
 
 # Feature Extractor 
 FeatureExtractor.numOctaves: 8
