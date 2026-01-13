@@ -81,7 +81,7 @@ FeatureMatcher::FeatureMatcher(float nnratio, bool checkOri): mfNNratio(nnratio)
     sift_match_gpu_ = SiftMatchGPU();
     sift_match_gpu_.SetLanguage(SiftMatchGPU::SIFTMATCH_CUDA);
     if (sift_match_gpu_.VerifyContextGL() == 0) {
-        std::cout << "Initialization failed!" << std::endl;
+       std::cout << "Initialization failed!" << std::endl;
     }
     int max_supported = 4000;
     sift_match_gpu_ .Allocate(max_supported, 1);
@@ -90,7 +90,6 @@ FeatureMatcher::FeatureMatcher(float nnratio, bool checkOri): mfNNratio(nnratio)
 
 // SearchByProjection 1
 // TrackLocalMap
-
 int FeatureMatcher::SearchByProjection(Frame &frame, const vector<Pt> &mapPoints){
 
     std::map<FeatureType, std::map<KeyframeId, std::vector<Pt>>> mapPointsByType;
@@ -163,9 +162,7 @@ int FeatureMatcher::SearchByProjection(Frame &frame, const vector<Pt> &mapPoints
                                 }
                             }
                         }
-                        //alreadyMatched.at(ft).erase(std::remove(alreadyMatched.at(ft).begin(), alreadyMatched.at(ft).end(), m.queryIdx), alreadyMatched.at(ft).end());
                         frameDescriptors.at(ft).row(m.queryIdx).release();
-                        //std::cout << "already matched = "<< alreadyMatched.at(ft).size() << std::endl;
                         numMatches++;
                         numMachedPoints.back()++;
                         break;
@@ -178,9 +175,6 @@ int FeatureMatcher::SearchByProjection(Frame &frame, const vector<Pt> &mapPoints
                         break;
                     }
                 }
-
-                // frame.pts.at(ft)[m.queryIdx] = pMP;
-                // numMatches++;
             }
         }
     }
@@ -771,7 +765,6 @@ int FeatureMatcher::Fuse(Keyframe pKF, const vector<Pt> &vpMapPoints, const floa
     int nFused=0;
 
     const int nMPs = vpMapPoints.size();
-
     for(int i=0; i<nMPs; i++)
     {
         Pt pMP = vpMapPoints[i];
@@ -795,7 +788,6 @@ int FeatureMatcher::Fuse(Keyframe pKF, const vector<Pt> &vpMapPoints, const floa
 
         const float u = fx*x+cx;
         const float v = fy*y+cy;
-
         // Point must be inside the image
         if(!pKF->IsInImage(u,v))
             continue;
@@ -806,7 +798,6 @@ int FeatureMatcher::Fuse(Keyframe pKF, const vector<Pt> &vpMapPoints, const floa
         const float minDistance = pMP->GetMinDistanceInvariance();
         vec3f PO = p3Dw - Ow;
         const float dist3D = PO.norm();
-
         // Depth must be inside the scale pyramid of the image
         if(dist3D < minDistance || dist3D > maxDistance )
             continue;
@@ -822,15 +813,12 @@ int FeatureMatcher::Fuse(Keyframe pKF, const vector<Pt> &vpMapPoints, const floa
         const float radius = radiusScale * radiusTh * predictedSize;
 
         const vector<size_t> vIndices = pKF->GetFeaturesInArea(u,v,radius, featType);
-
         if(vIndices.empty())
             continue;
-
         // Match to the most similar keypoint in the radius
         const cv::Mat refDescriptor = pMP->GetDescriptor();
         Descriptor_Distance_Type bestDist{highestPossibleDistance};
         int bestIdx{-1};
-
         for(vector<size_t>::const_iterator vit=vIndices.begin(), vend=vIndices.end(); vit!=vend; vit++)
         {
             const size_t idx = *vit;
@@ -878,13 +866,18 @@ int FeatureMatcher::Fuse(Keyframe pKF, const vector<Pt> &vpMapPoints, const floa
         }
 
         // If there is already a MapPoint replace otherwise add new measurement
+        if(featType == FEAT_ALIKED128){
+            if(bestDist <= 100.0)
+                std::cout << "Fuse: bestDist = " << bestDist << std::endl;
+        }
+
         if(bestDist <= TH_LOW)
         {
             Pt pMPinKF = pKF->GetMapPoint(bestIdx, featType);
             if(pMPinKF)
             {
                 if(!pMPinKF->isBad())
-                {
+                {   
                     if(pMPinKF->NumberOfObservations() > pMP->NumberOfObservations())
                         pMP->Replace(pMPinKF);
                     else

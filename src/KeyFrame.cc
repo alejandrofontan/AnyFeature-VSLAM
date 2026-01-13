@@ -621,6 +621,10 @@ void KeyFrame::EraseConnection(Keyframe keyframe)
 
 vector<size_t> KeyFrame::GetFeaturesInArea(const float &x, const float &y, const float &r, const FeatureType& featType) const
 {
+    auto it1 = N.find(featType);
+    if (it1 == N.end() ) 
+        return vector<size_t> (); 
+
     vector<size_t> vIndices;
     vIndices.reserve(N.at(featType));
 

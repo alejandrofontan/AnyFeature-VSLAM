@@ -73,7 +73,9 @@ void LocalMapping::Run()
             if(!CheckNewKeyFrames())
             {
                 // Find more matches in neighbor keyframes and fuse point duplications
-                SearchInNeighbors();
+                for (const auto& [feat, N_] : mpCurrentKeyFrame->N) {
+                    SearchInNeighbors(feat);
+                }
             }
 
             mbAbortBA = false;
@@ -232,10 +234,6 @@ void LocalMapping::MapPointCulling()
 
 void LocalMapping::CreateNewMapPoints()
 {
-    // const FeatureType featureType = featureTypes[featureCreateNewMapPoints];
-    // const KeypointType keypointType = GetKeypointType(featureType);
-    // const DescriptorType descriptorType = GetDescriptorType(featureType);
-
     // Retrieve neighbor keyframes in covisibility graph
     int nn{CREATE_NEW_MAP_POINTS_BEST_COVISIBILITY_KEYFRAMES};
     if(mbMonocular)
@@ -460,10 +458,8 @@ void LocalMapping::CreateNewMapPoints()
     }
 }
 
-void LocalMapping::SearchInNeighbors()
+void LocalMapping::SearchInNeighbors(const FeatureType& featureType)
 {
-    const FeatureType featureType = featureTypes[featureSearchInNeighbors];
-
     // Retrieve neighbor keyframes
     int nn = 10;
     if(mbMonocular)
@@ -488,7 +484,6 @@ void LocalMapping::SearchInNeighbors()
             vpTargetKFs.push_back(pKFi2);
         }
     }
-
 
     // Search matches by projection from current KF in target KFs
     //FeatureMatcher matcher;
@@ -524,7 +519,6 @@ void LocalMapping::SearchInNeighbors()
 
     matcher->Fuse(mpCurrentKeyFrame,vpFuseCandidates,3.0f, featureType);
 
-
     // Update points
     vpMapPointMatches = mpCurrentKeyFrame->GetMapPointMatches(featureType);
     for(size_t i=0, iend=vpMapPointMatches.size(); i<iend; i++)
@@ -539,7 +533,6 @@ void LocalMapping::SearchInNeighbors()
             }
         }
     }
-
     // Update connections in covisibility graph
     mpCurrentKeyFrame->UpdateConnections();
 }
@@ -729,7 +722,7 @@ void LocalMapping::KeyFrameCulling()
                     pKF->SetBadFlag();
                 }*/
     //#else     
-                //if (pKF->keyId % 10 != 0)
+                //if (pKF->mnFrameId % 1000 == 0)
                 pKF->SetBadFlag();
     //#endif
             }

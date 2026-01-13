@@ -154,5 +154,5 @@ void ANYFEATURE_VSLAM::FeatureExtractor_sift128::filterKeypoints(std::map<int,st
 }
 
 float ANYFEATURE_VSLAM::DescriptorDistance_sift128(const cv::Mat &a, const cv::Mat &b){
-    return (Descriptor_Distance_Type) cv::norm(a,b,cv::NORM_L2SQR);
+    return (Descriptor_Distance_Type) cv::norm(a,b,cv::NORM_L2);
 }

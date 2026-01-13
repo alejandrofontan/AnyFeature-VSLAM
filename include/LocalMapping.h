@@ -76,7 +76,6 @@ public:
     vector<double> localMappingTime{};
     vector<FeatureType> featureTypes{};
     int featureProcessNewKeyframe{0};
-    int featureCreateNewMapPoints{0};
     int featureSearchInNeighbors{0};
 
 protected:
@@ -86,7 +85,7 @@ protected:
     void CreateNewMapPoints();
 
     void MapPointCulling();
-    void SearchInNeighbors();
+    void SearchInNeighbors(const FeatureType& featureType);
 
     void KeyFrameCulling();
 

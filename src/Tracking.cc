@@ -83,7 +83,7 @@ Tracking::Tracking(System *pSys, shared_ptr<Vocabulary> vocabulary,
 
     if(sensor==System::MONOCULAR)
         initFeatureExtractor[featureTypes[featureInitialization]] = Tracking::getFeatureExtractor(scaleNumFeaturesMonocular , 
-            "none", featureTypes[featureInitialization]); 
+            feature_settings_yaml_file.at(featureTypes[featureInitialization]), featureTypes[featureInitialization]); 
     
     matcher = std::make_shared<FeatureMatcher>();        
 }
