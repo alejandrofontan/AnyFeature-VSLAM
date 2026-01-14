@@ -15,7 +15,6 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/bin)
 # Compiler flags
 add_compile_options(-Wall -Wextra -Wpedantic -O3 -march=native)
 
-# add_subdirectory(${PROJECT_SOURCE_DIR}/Thirdparty/DBoW2/SiftGPU)
 set(SRCS_ANYFEATURE
         src/System.cc
         src/Tracking.cc
@@ -64,8 +63,8 @@ find_package(Python REQUIRED COMPONENTS Interpreter)
 find_package(brisk REQUIRED)
 find_package(akaze REQUIRED)
 find_package(SiftGPU CONFIG REQUIRED)
-list(PREPEND CMAKE_PREFIX_PATH "${PROJECT_SOURCE_DIR}/Thirdparty/Light_Glue_CPP")  # or wherever you installed
-find_package(LightGlue REQUIRED)
+# list(PREPEND CMAKE_PREFIX_PATH "${PROJECT_SOURCE_DIR}/Thirdparty/Light_Glue_CPP/cmake")
+find_package(LightGlue REQUIRED HINTS "${PROJECT_SOURCE_DIR}/Thirdparty/Light_Glue_CPP/build")
 
 set(DBoW2_INCLUDE_DIRS "${PROJECT_SOURCE_DIR}/Thirdparty/DBoW2/include")
 set(DBoW2_LIBRARIES "${PROJECT_SOURCE_DIR}/Thirdparty/DBoW2/lib/libDBoW2.so")

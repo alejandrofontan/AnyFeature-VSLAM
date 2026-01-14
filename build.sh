@@ -67,6 +67,11 @@ library_name="DBoW2"
 source_folder="${LIBRARY_DIR}/Thirdparty/${library_name}"
 build_library ${library_name} ${source_folder} ${verbose} ${force_build}
 
+## Build Light_Glue_CPP
+library_name="Light_Glue_CPP"
+source_folder="${LIBRARY_DIR}/Thirdparty/${library_name}"
+build_library ${library_name} ${source_folder} ${verbose} ${force_build}
+
 ## Build AnyFeature-VSLAM
 library_name="AnyFeature-VSLAM"
 source_folder="${LIBRARY_DIR}"
