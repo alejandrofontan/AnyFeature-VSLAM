@@ -15,6 +15,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/bin)
 # Compiler flags
 add_compile_options(-Wall -Wextra -Wpedantic -O3 -march=native)
 
+# add_subdirectory(${PROJECT_SOURCE_DIR}/Thirdparty/DBoW2/SiftGPU)
 set(SRCS_ANYFEATURE
         src/System.cc
         src/Tracking.cc
@@ -50,6 +51,7 @@ set(SRCS_ANYFEATURE
         src/Feature_r2d2_128.cpp
         src/Feature_anyFeatBin.cpp
         src/Feature_anyFeatNonBin.cpp
+        src/Feature_aliked128.cpp
 ) 
 
 # Dependencies
@@ -61,7 +63,9 @@ find_package(g2o REQUIRED)
 find_package(Python REQUIRED COMPONENTS Interpreter)
 find_package(brisk REQUIRED)
 find_package(akaze REQUIRED)
-find_package(SiftGPU REQUIRED)
+find_package(SiftGPU CONFIG REQUIRED)
+list(PREPEND CMAKE_PREFIX_PATH "${PROJECT_SOURCE_DIR}/Thirdparty/Light_Glue_CPP")  # or wherever you installed
+find_package(LightGlue REQUIRED)
 
 set(DBoW2_INCLUDE_DIRS "${PROJECT_SOURCE_DIR}/Thirdparty/DBoW2/include")
 set(DBoW2_LIBRARIES "${PROJECT_SOURCE_DIR}/Thirdparty/DBoW2/lib/libDBoW2.so")
@@ -84,13 +88,20 @@ target_link_libraries(${PROJECT_NAME}
         ${DBoW2_LIBRARIES}
         ${brisk_LIBRARIES}
         ${akaze_LIBRARIES}
-        ${SiftGPU_LIBRARIES}
         ${Pangolin_LIBRARIES}
+        SiftGPU::sift_gpu
+        LightGlue::lib
 )
 
 # Example executables
 add_executable(vslamlab_anyfeature_mono src/vslamlab_anyfeature_mono.cpp)
 target_link_libraries(vslamlab_anyfeature_mono ${PROJECT_NAME})
+
+# add_executable(feature_calibration src/feature_calibration.cpp)
+# target_link_libraries(feature_calibration ${PROJECT_NAME})
+
+# add_executable(feature_match_cal src/feature_match_cal.cpp)
+# target_link_libraries(feature_match_cal ${PROJECT_NAME})
 
 # add_executable(createVocabulary src/createVocabulary.cpp)
 # target_link_libraries(createVocabulary ${PROJECT_NAME})
