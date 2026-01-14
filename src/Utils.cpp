@@ -175,7 +175,7 @@ cv::Scalar ANYFEATURE_VSLAM::getFeatureColor(const FeatureType& featureType, con
             break;
         }
         case FEAT_BRISK:{
-            color << 120, 255, 120;
+            color << 0, 122, 122;
             break;
         }
         case FEAT_AKAZE61:{

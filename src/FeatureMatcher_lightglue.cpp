@@ -111,8 +111,8 @@ static std::vector<cv::DMatch> lightglue_to_dmatches(
         float min_score
     ){
 
-        FeatDict f0 = make_feats_like_aliked(kps1, desc1, 739, 458, *torch_device);
-        FeatDict f1 = make_feats_like_aliked(kps2, desc2, 739, 458, *torch_device);
+        FeatDict f0 = make_feats_like_aliked(kps1, desc1, imageWidth, imageHeight, *torch_device);
+        FeatDict f1 = make_feats_like_aliked(kps2, desc2, imageWidth, imageHeight, *torch_device);
 
         auto matches01 = matcher_lightglue->forward(f0, f1);
         const auto& matches0 = matches01.at("matches0");

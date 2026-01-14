@@ -41,7 +41,7 @@ class Map;
 class LocalMapping
 {
 public:
-    LocalMapping(shared_ptr<Map> pMap, const float bMonocular, const vector<FeatureType>& featureTypes);
+    LocalMapping(shared_ptr<Map> pMap, const float bMonocular, const vector<FeatureType>& featureTypes, const int& imageWidth, const int& imageHeight);
 
     void SetLoopCloser(std::shared_ptr<LoopClosing>  loopCloser_);
 
@@ -140,6 +140,9 @@ protected:
     const float CREATE_NEW_MAP_POINTS_DIST_RATIO{0.6f};
     const float CREATE_NEW_MAP_POINTS_RATIO_FACTOR{1.5f};
     const float CREATE_NEW_MAP_POINTS_RATIO_BASELINE_DEPTH{0.01f};
+
+    const int imageWidth;
+    const int imageHeight;
 
 };
 

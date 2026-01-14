@@ -39,7 +39,7 @@ class FeatureMatcher
 {    
 public:
 
-    FeatureMatcher(float nnratio=0.6, bool checkOri=true);
+    FeatureMatcher(const int& imageWidth, const int& imageHeight, float nnratio=0.6, bool checkOri=true);
 
     // Computes the Hamming distance between two ORB descriptors
     static Descriptor_Distance_Type DescriptorDistance(const cv::Mat &a, const cv::Mat &b, const DescriptorType& descriptorType_);
@@ -132,6 +132,8 @@ protected:
     cv::BFMatcher bf_matcher_L2{cv::NORM_L2, true};
     std::shared_ptr<matcher::LightGlue> matcher_lightglue;
     std::shared_ptr<torch::Device> torch_device;
+    int imageWidth;
+    int imageHeight;
 };
 
 }// namespace ORB_SLAM

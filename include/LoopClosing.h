@@ -62,7 +62,7 @@ public:
 
 public:
 
-    LoopClosing(shared_ptr<Map> pMap, shared_ptr<KeyFrameDatabase> pDB, shared_ptr<Vocabulary> vocabulary,const bool bFixScale, const FeatureType& featureType);
+    LoopClosing(shared_ptr<Map> pMap, shared_ptr<KeyFrameDatabase> pDB, shared_ptr<Vocabulary> vocabulary,const bool bFixScale, const FeatureType& featureType, int imageWidth, int imageHeight);
 
     void SetTracker(std::shared_ptr<Tracking> tracker);
 
@@ -160,9 +160,11 @@ protected:
 
     // Fix scale in the stereo/RGB-D case
     bool mbFixScale;
-
-
     bool mnFullBAIdx;
+
+    int imageWidth;
+    int imageHeight;
+
 };
 
 } //namespace ORB_SLAM

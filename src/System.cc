@@ -109,11 +109,12 @@ System::System(const string &vocabularyFolder,
                              mSensor, featureTypes, fixImageSize);
 
     //Initialize the Local Mapping thread and launch
-    localMapper = make_shared<LocalMapping>(mpMap, mSensor==MONOCULAR, featureTypes);
+    localMapper = make_shared<LocalMapping>(mpMap, mSensor==MONOCULAR, featureTypes, tracker->get_image_width(), tracker->get_image_height());
     mptLocalMapping = make_shared<thread>(&ANYFEATURE_VSLAM::LocalMapping::Run, localMapper);
 
     //Initialize the Loop Closing thread and launch
-    loopCloser =  make_shared<LoopClosing>(mpMap, mpKeyFrameDatabase, vocabulary, mSensor!=MONOCULAR, featureTypes[featureLoopClosure]);
+    loopCloser =  make_shared<LoopClosing>(mpMap, mpKeyFrameDatabase, vocabulary, mSensor!=MONOCULAR, featureTypes[featureLoopClosure], 
+        tracker->get_image_width(), tracker->get_image_height());
     mptLoopClosing = make_shared<thread>(&ANYFEATURE_VSLAM::LoopClosing::Run, loopCloser);
 
     //Initialize the Viewer thread and launch
@@ -610,4 +611,10 @@ void System::SaveStatistics(const std::string &filename){
 
 }
 
-} //namespace ORB_SLAM
+void System::setImageSize(const int width, const int height){
+    imageWidth = width;
+    imageHeight = height;
+}
+
+}
+//namespace ORB_SLAM

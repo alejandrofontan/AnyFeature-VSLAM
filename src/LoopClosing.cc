@@ -38,10 +38,12 @@ namespace ANYFEATURE_VSLAM
     LoopConnections::LoopConnections(const KeyframeId & keyframeId, const Keyframe& keyframe, const map<KeyframeId,Keyframe>& connections):
             keyframeId(keyframeId), keyframe(keyframe), connections(connections){}
 
-LoopClosing::LoopClosing(shared_ptr<Map>pMap, shared_ptr<KeyFrameDatabase>pDB, shared_ptr<Vocabulary> vocabulary, const bool bFixScale, const FeatureType& featureType):
+LoopClosing::LoopClosing(shared_ptr<Map>pMap, shared_ptr<KeyFrameDatabase>pDB, shared_ptr<Vocabulary> vocabulary, 
+    const bool bFixScale, const FeatureType& featureType, int imageWidth, int imageHeight):
     mbResetRequested(false), mbFinishRequested(false), mbFinished(true), mpMap(pMap),
     mpKeyFrameDB(pDB), vocabulary(vocabulary), mpMatchedKF(NULL), mLastLoopKFid(0), mbRunningGBA(false), mbFinishedGBA(true),
-    mbStopGBA(false), mpThreadGBA(NULL), mbFixScale(bFixScale), featureType(featureType), mnFullBAIdx(0)
+    mbStopGBA(false), mpThreadGBA(NULL), mbFixScale(bFixScale), featureType(featureType), mnFullBAIdx(0),
+    imageWidth(imageWidth), imageHeight(imageHeight)
 {
     mnCovisibilityConsistencyTh = 3;
 }
@@ -252,7 +254,7 @@ bool LoopClosing::ComputeSim3()
 
     // We compute first ORB matches for each candidate
     // If enough matches are found, we setup a Sim3Solver
-    FeatureMatcher matcher(0.75, true);
+    FeatureMatcher matcher(0.75, true, imageWidth, imageHeight);
 
     vector<Sim3Solver*> vpSim3Solvers;
     vpSim3Solvers.resize(nInitialCandidates);
@@ -600,7 +602,7 @@ void LoopClosing::CorrectLoop()
 
 void LoopClosing::SearchAndFuse(const KeyFrameAndPose &CorrectedPosesMap)
 {
-    FeatureMatcher matcher(0.8);
+    FeatureMatcher matcher(0.8, true, imageWidth, imageHeight);
 
     for(KeyFrameAndPose::const_iterator mit=CorrectedPosesMap.begin(), mend=CorrectedPosesMap.end(); mit!=mend;mit++)
     {

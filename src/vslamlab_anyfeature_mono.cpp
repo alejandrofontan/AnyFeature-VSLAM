@@ -123,7 +123,11 @@ int main(int argc, char **argv)
     std::map<FeatureType, string> feature_settings_yaml_file;
     feature_settings_yaml_file[FEAT_ORB] = "settings/orb32_settings.yaml";
     feature_settings_yaml_file[FEAT_AKAZE61] = "settings/akaze61_settings.yaml";
+    feature_settings_yaml_file[FEAT_BRISK] = "settings/brisk48_settings.yaml";
+    feature_settings_yaml_file[FEAT_SURF64] = "settings/surf64_settings.yaml";
+    feature_settings_yaml_file[FEAT_KAZE64] = "settings/kaze64_settings.yaml";
     feature_settings_yaml_file[FEAT_SIFT128] = "settings/sift128_settings.yaml";
+    feature_settings_yaml_file[FEAT_ALIKED128] = "settings/aliked128_settings.yaml";
 
     // Retrieve paths to images
     vector<string> imageFilenames{};

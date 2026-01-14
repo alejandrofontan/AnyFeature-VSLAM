@@ -29,11 +29,12 @@
 namespace ANYFEATURE_VSLAM
 {
 
-LocalMapping::LocalMapping(shared_ptr<Map> pMap, const float bMonocular, const vector<FeatureType>& featureTypes):
+LocalMapping::LocalMapping(shared_ptr<Map> pMap, const float bMonocular, const vector<FeatureType>& featureTypes, const int& imageWidth, const int& imageHeight):
     mbMonocular(bMonocular), mbResetRequested(false), mbFinishRequested(false), mbFinished(true), mpMap(pMap),
-    mbAbortBA(false), mbStopped(false), mbStopRequested(false), mbNotStop(false), mbAcceptKeyFrames(true), featureTypes(featureTypes)
+    mbAbortBA(false), mbStopped(false), mbStopRequested(false), mbNotStop(false), mbAcceptKeyFrames(true), featureTypes(featureTypes),
+    imageWidth(imageWidth), imageHeight(imageHeight)
 {
-    matcher = std::make_shared<FeatureMatcher>();
+    matcher = std::make_shared<FeatureMatcher>(imageWidth, imageHeight);
 }
 
 void LocalMapping::SetLoopCloser(std::shared_ptr<LoopClosing>  loopCloser_)

@@ -9,3 +9,9 @@ FeatureExtractor.detectionTh: 0.0005
 
 # Feature Matcher 
 FeatureMatcher.matchingTh: 0.1
+
+# Feature Matcher 
+FeatureMatcher.TH_HIGH: 0.15
+FeatureMatcher.TH_LOW: 0.1
+FeatureMatcher.descDistTh_high_reloc: 0.15
+FeatureMatcher.descDistTh_low_reloc: 0.1
