@@ -29,6 +29,7 @@
 #include "KeyFrame.h"
 #include "Frame.h"
 #include "Feature_sift128.h"
+#include "matcher/lightglue/matcher.hpp"
 
 
 namespace ANYFEATURE_VSLAM
@@ -44,6 +45,11 @@ public:
     static Descriptor_Distance_Type DescriptorDistance(const cv::Mat &a, const cv::Mat &b, const DescriptorType& descriptorType_);
     cv::NormTypes getNormType(const FeatureType& featureType_);
     std::vector<cv::DMatch> featureMatching(const cv::Mat& desc1, const cv::Mat& desc2, const FeatureType& ft);
+    std::vector<cv::DMatch> featureMatching(const cv::Mat& desc1, const cv::Mat& desc2,  const std::vector<cv::KeyPoint>& kps1, const std::vector<cv::KeyPoint>& kps2, const FeatureType& ft);
+    std::vector<cv::DMatch> lightglueMatching(
+            const std::vector<cv::KeyPoint>& kps1, const cv::Mat& desc1,
+            const std::vector<cv::KeyPoint>& kps2, const cv::Mat& desc2,
+            float min_score = 0.0f);
 
     // Search matches between Frame keypoints and projected MapPoints. Returns number of matches
     // Used to track the local map (Tracking)
@@ -124,6 +130,8 @@ protected:
     SiftMatchGPU sift_match_gpu_{};
     cv::BFMatcher bf_matcher_hamming{cv::NORM_HAMMING, true};
     cv::BFMatcher bf_matcher_L2{cv::NORM_L2, true};
+    std::shared_ptr<matcher::LightGlue> matcher_lightglue;
+    std::shared_ptr<torch::Device> torch_device;
 };
 
 }// namespace ORB_SLAM

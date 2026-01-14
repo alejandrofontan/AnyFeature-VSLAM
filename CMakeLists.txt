@@ -51,6 +51,7 @@ set(SRCS_ANYFEATURE
         src/Feature_anyFeatBin.cpp
         src/Feature_anyFeatNonBin.cpp
         src/Feature_aliked128.cpp
+        src/FeatureMatcher_lightglue.cpp
 ) 
 
 # Dependencies
