@@ -1,3 +1,6 @@
 [submodule "Thirdparty/DBoW2"]
 	path = Thirdparty/DBoW2
 	url = https://github.com/alejandrofontan/DBoW2.git
+[submodule "Thirdparty/Light_Glue_CPP"]
+	path = Thirdparty/Light_Glue_CPP
+	url = git@github.com:VSLAM-LAB/Light_Glue_CPP.git
