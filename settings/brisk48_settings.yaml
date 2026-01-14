@@ -8,8 +8,6 @@ FeatureExtractor.scaleFactor: 1.5
 FeatureExtractor.detectionTh: 34.0
 
 # Feature Matcher 
-FeatureMatcher.matchingTh: 120.0
-# Feature Matcher 
 FeatureMatcher.TH_HIGH: 120.0
 FeatureMatcher.TH_LOW: 60.0
 FeatureMatcher.descDistTh_high_reloc: 100
