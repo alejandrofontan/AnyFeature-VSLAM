@@ -1,14 +1,10 @@
-//
-// Created by fontan on 7/06/24.
-//
-
 #include "Feature_aliked128.h"
 
 #include <opencv2/opencv.hpp>
 #include <torch/torch.h>
 
-ANYFEATURE_VSLAM::FeatureExtractor_aliked128::FeatureExtractor_aliked128(const int &nfeatures_, std::shared_ptr<FeatureExtractorSettings> &settings_):
-        FeatureExtractor(nfeatures_,settings_){
+ANYFEATURE_VSLAM::FeatureExtractor_aliked128::FeatureExtractor_aliked128(std::shared_ptr<FeatureExtractorSettings> &settings_):
+        FeatureExtractor(settings_){
             
         torch::Device device = torch::cuda::is_available() ? torch::kCUDA : torch::kCPU;    
         extractor = std::make_shared<ALIKED>("aliked-n16", device.str());
@@ -37,20 +33,11 @@ static cv::Mat tensorDescToMatCopy(const at::Tensor& desc_in) {
 }
 
 void ANYFEATURE_VSLAM::FeatureExtractor_aliked128::detectAndCompute(const Image& img, std::vector<cv::KeyPoint>& keypoints, cv::Mat& descriptors){
-    std::map<int,std::vector<cv::KeyPoint>> keypoints_level;
-    std::map<int,cv::Mat> descriptors_level;
-    //detectKeypoints(keypoints_level, img, settings->detectTh, settings->nOctaves);
-    //filterKeypoints(keypoints_level, img.grayImg, img.mask);
-    //computeDescriptors(descriptors_level,keypoints_level,img);
-    //torch::Device device = torch::cuda::is_available() ? torch::kCUDA : torch::kCPU;
-    //auto extractor = std::make_shared<ALIKED>("aliked-n16", device.str());
-    cv::Mat gray = img.img.clone();   
-    auto feats0 = extractor->run(gray);
+    cv::Mat img_ = img.img.clone();   
+    auto feats0 = extractor->run(img_);
+
     const auto& kpts = feats0.at("keypoints");
-    //const auto kpts_cpu = kpts.cpu();
-
     at::Tensor kpts_cpu = kpts.cpu().contiguous().to(at::kFloat);
-
     TORCH_CHECK(kpts_cpu.dim() == 2 && kpts_cpu.size(1) >= 2, "Expected keypoints [N,2] (or more)");
 
     int N = (int)kpts_cpu.size(0);
@@ -67,60 +54,12 @@ void ANYFEATURE_VSLAM::FeatureExtractor_aliked128::detectAndCompute(const Image&
         keyPt.angle = 0;
         keyPt.octave = 0;
         keyPt.response = 1.0;
-        keypoints_level[keyPt.octave].push_back(keyPt);
+        keypoints.push_back(keyPt);
         ++iKey;
     }
 
     const auto& desc_t = feats0.at("descriptors");
-    descriptors_level[0] = tensorDescToMatCopy(desc_t);
-
-    mergeKeypointLevels(keypoints,descriptors,descriptors_level,keypoints_level);
-}
-
-void ANYFEATURE_VSLAM::FeatureExtractor_aliked128::initializeExtractor(const Image& img){
-}
-
-void ANYFEATURE_VSLAM::FeatureExtractor_aliked128::detectKeypoints(
-        std::map<int,std::vector<cv::KeyPoint>>& keypoints_level,
-        const Image& img, const float& detectTh, const int& nOctaves) const{
-
-    torch::Device device = torch::cuda::is_available() ? torch::kCUDA : torch::kCPU;
-    auto extractor = std::make_shared<ALIKED>("aliked-n16", device.str());
-    cv::Mat gray = img.img.clone();   
-    auto feats0 = extractor->run(gray);
-    const auto& kpts = feats0.at("keypoints");
-
-    at::Tensor kpts_cpu = kpts.cpu().contiguous().to(at::kFloat);
-
-    TORCH_CHECK(kpts_cpu.dim() == 2 && kpts_cpu.size(1) >= 2, "Expected keypoints [N,2] (or more)");
-
-    int N = (int)kpts_cpu.size(0);
-    auto acc = kpts_cpu.accessor<float, 2>();
-    int iKey{0};
-    for (int i = 0; i < N; ++i) {
-        float x = acc[i][0];
-        float y = acc[i][1];
-        cv::KeyPoint keyPt{};
-        keyPt.pt.x = x;
-        keyPt.pt.y = y;
-        keyPt.class_id = iKey;
-        keyPt.size = 1;
-        keyPt.angle = 0;
-        keyPt.octave = 0;
-        keyPt.response = 1.0;
-        keypoints_level[keyPt.octave].push_back(keyPt);
-        ++iKey;
-    } 
-}
-
-typedef Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
-    FeatureDescriptorsFloat;
-
-void ANYFEATURE_VSLAM::FeatureExtractor_aliked128::computeDescriptors(
-        std::map<int,cv::Mat>& descriptors_level,
-        std::map<int,std::vector<cv::KeyPoint>>& keypoints_level,
-        const Image& img) const {
-    return;
+    descriptors = tensorDescToMatCopy(desc_t);
 }
 
 int ANYFEATURE_VSLAM::FeatureExtractor_aliked128::GetKeypointOctave(const cv::KeyPoint& keypoint) const{
@@ -128,11 +67,7 @@ int ANYFEATURE_VSLAM::FeatureExtractor_aliked128::GetKeypointOctave(const cv::Ke
 }
 
 float ANYFEATURE_VSLAM::FeatureExtractor_aliked128::GetKeypointSize(const cv::KeyPoint& keypoint) const{
-    return powf(settings->GetDetectorNominalScaleFactor(), float(GetKeypointOctave(keypoint)));
-}
-
-void ANYFEATURE_VSLAM::FeatureExtractor_aliked128::filterKeypoints(std::map<int,std::vector<cv::KeyPoint>>& keypoints_level, const cv::Mat& image, const cv::Mat& mask) const{
-    FeatureExtractor::filterKeypoints_notScaled(keypoints_level,image,mask);
+    return powf(settings->GetDetectorScaleFactor(), float(GetKeypointOctave(keypoint)));
 }
 
 float ANYFEATURE_VSLAM::DescriptorDistance_aliked128(const cv::Mat &a, const cv::Mat &b){
