@@ -80,7 +80,6 @@ Tracking::Tracking(System *pSys, shared_ptr<Vocabulary> vocabulary,
     }
     //if(sensor==System::STEREO)
         //featureExtractorRight = std::make_shared<FeatureExtractor>(numFeatures,extractorSettings);
-
     if(sensor==System::MONOCULAR)
         initFeatureExtractor[featureTypes[featureInitialization]] = Tracking::getFeatureExtractor(scaleNumFeaturesMonocular , 
             feature_settings_yaml_file.at(featureTypes[featureInitialization]), featureTypes[featureInitialization]); 
@@ -1536,7 +1535,7 @@ shared_ptr<FeatureExtractor> Tracking::getFeatureExtractor(const int& scaleNumFe
                                                            const string &featureSettingsYamlFile,
                                                             const FeatureType& featureType){
     //cv::FileStorage fSettings(featureSettingsYamlFile, cv::FileStorage::READ);
-    cout << endl  << "Feature Extractor Parameters: " << endl;
+    //cout << endl  << "Feature Extractor Parameters: " << endl;
     const KeypointType keypointType = GetKeypointType(featureType);
     const DescriptorType descriptorType = GetDescriptorType(featureType);
 
@@ -1547,39 +1546,38 @@ shared_ptr<FeatureExtractor> Tracking::getFeatureExtractor(const int& scaleNumFe
     else if (numFeatures < 1000)
         numFeatures = 1000;
     numFeatures *= scaleNumFeaturesMonocular_;
-    cout << "- Number of Features: " << numFeatures << endl;
 
     shared_ptr<FeatureExtractorSettings> extractorSettings = make_shared<FeatureExtractorSettings>(keypointType, descriptorType, featureSettingsYamlFile);
     switch (keypointType) {
         case KEYP_ALIKED128:{
-            return std::make_shared<FeatureExtractor_aliked128>(numFeatures,extractorSettings);
+            return std::make_shared<FeatureExtractor_aliked128>(extractorSettings);
         }
         case KEYP_ANYFEATNONBIN:{
-            return std::make_shared<FeatureExtractor_anyFeatNonBin>(numFeatures,extractorSettings);
+            return std::make_shared<FeatureExtractor_anyFeatNonBin>(extractorSettings);
         }
         case KEYP_ANYFEATBIN:{
-            return std::make_shared<FeatureExtractor_anyFeatBin>(numFeatures,extractorSettings);
+            return std::make_shared<FeatureExtractor_anyFeatBin>(extractorSettings);
         }
         case KEYP_R2D2:{
-            return std::make_shared<FeatureExtractor_r2d2_128>(numFeatures,extractorSettings);
+            return std::make_shared<FeatureExtractor_r2d2_128>(extractorSettings);
         }
         case KEYP_SIFT:{
-            return std::make_shared<FeatureExtractor_sift128>(numFeatures,extractorSettings);
+            return std::make_shared<FeatureExtractor_sift128>(extractorSettings);
         }
         case KEYP_KAZE:{
-            return std::make_shared<FeatureExtractor_kaze64>(numFeatures,extractorSettings);
+            return std::make_shared<FeatureExtractor_kaze64>(extractorSettings);
         }
         case KEYP_SURF:{
-            return std::make_shared<FeatureExtractor_surf64>(numFeatures,extractorSettings);
+            return std::make_shared<FeatureExtractor_surf64>(extractorSettings);
         }
         case KEYP_AKAZE:{
-            return std::make_shared<FeatureExtractor_akaze61>(numFeatures,extractorSettings);
+            return std::make_shared<FeatureExtractor_akaze61>(extractorSettings);
         }
         case KEYP_BRISK:{
-            return std::make_shared<FeatureExtractor_brisk48>(numFeatures,extractorSettings);
+            return std::make_shared<FeatureExtractor_brisk48>(extractorSettings);
         }
         case KEYP_ORB: {
-            return std::make_shared<FeatureExtractor_orb32>(numFeatures,extractorSettings);
+            return std::make_shared<FeatureExtractor_orb32>(extractorSettings);
         }
     }
     return nullptr;

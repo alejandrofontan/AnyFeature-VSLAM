@@ -20,7 +20,6 @@ set(SRCS_ANYFEATURE
         src/Tracking.cc
         src/LocalMapping.cc
         src/LoopClosing.cc
-        src/ORBextractor.cc
         src/FeatureMatcher.cc
         src/FrameDrawer.cc
         src/Converter.cc
