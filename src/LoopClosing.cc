@@ -46,6 +46,7 @@ LoopClosing::LoopClosing(shared_ptr<Map>pMap, shared_ptr<KeyFrameDatabase>pDB, s
     imageWidth(imageWidth), imageHeight(imageHeight)
 {
     mnCovisibilityConsistencyTh = 3;
+    matcher = std::make_shared<FeatureMatcher>(0.8, true, imageWidth, imageHeight);
 }
 
 void LoopClosing::SetTracker(std::shared_ptr<Tracking> tracker_)
@@ -254,7 +255,6 @@ bool LoopClosing::ComputeSim3()
 
     // We compute first ORB matches for each candidate
     // If enough matches are found, we setup a Sim3Solver
-    FeatureMatcher matcher(0.75, true, imageWidth, imageHeight);
 
     vector<Sim3Solver*> vpSim3Solvers;
     vpSim3Solvers.resize(nInitialCandidates);
@@ -280,7 +280,7 @@ bool LoopClosing::ComputeSim3()
             continue;
         }
 
-        int nmatches = matcher.SearchByBoW(mpCurrentKF,pKF,vvpMapPointMatches[i], featureType);
+        int nmatches = matcher->SearchByBoW(mpCurrentKF,pKF,vvpMapPointMatches[i], featureType);
 
         if(nmatches<20)
         {
@@ -338,7 +338,7 @@ bool LoopClosing::ComputeSim3()
                 mat3f R = pSolver->GetEstimatedRotation();
                 vec3f t = pSolver->GetEstimatedTranslation();
                 const float s = pSolver->GetEstimatedScale();
-                matcher.SearchBySim3(mpCurrentKF,pKF,vpMapPointMatches,s,R,t,7.5f, featureType);
+                matcher->SearchBySim3(mpCurrentKF,pKF,vpMapPointMatches,s,R,t,7.5f, featureType);
 
                 g2o::Sim3 gScm(R.cast<double>(),t.cast<double>(),s);
                 const int nInliers = Optimizer::OptimizeSim3(mpCurrentKF, pKF, vpMapPointMatches, gScm, 10, mbFixScale, featureType);
@@ -390,7 +390,7 @@ bool LoopClosing::ComputeSim3()
     }
 
     // Find more matches projecting with the computed Sim3
-    matcher.SearchByProjection(mpCurrentKF, mScw, mvpLoopMapPoints, mvpCurrentMatchedPoints,10.0f, featureType);
+    matcher->SearchByProjection(mpCurrentKF, mScw, mvpLoopMapPoints, mvpCurrentMatchedPoints,10.0f, featureType);
 
     // If enough matches accept Loop
     int nTotalMatches = 0;
@@ -602,7 +602,6 @@ void LoopClosing::CorrectLoop()
 
 void LoopClosing::SearchAndFuse(const KeyFrameAndPose &CorrectedPosesMap)
 {
-    FeatureMatcher matcher(0.8, true, imageWidth, imageHeight);
 
     for(KeyFrameAndPose::const_iterator mit=CorrectedPosesMap.begin(), mend=CorrectedPosesMap.end(); mit!=mend;mit++)
     {
@@ -612,7 +611,7 @@ void LoopClosing::SearchAndFuse(const KeyFrameAndPose &CorrectedPosesMap)
         mat4f cvScw = Converter::toMatrix4f(g2oScw);
 
         vector<Pt> vpReplacePoints(mvpLoopMapPoints.size(),static_cast<Pt>(NULL));
-        matcher.Fuse(pKF,cvScw,mvpLoopMapPoints,4.0f,vpReplacePoints, featureType);
+        matcher->Fuse(pKF,cvScw,mvpLoopMapPoints,4.0f,vpReplacePoints, featureType);
 
         // Get Map Mutex
         unique_lock<mutex> lock(mpMap->mMutexMapUpdate);

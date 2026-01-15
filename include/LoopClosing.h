@@ -27,6 +27,7 @@
 #include "FeatureVocabulary.h"
 #include "Tracking.h"
 #include "MapDrawer.h"
+#include "FeatureMatcher.h"
 
 #include "KeyFrameDatabase.h"
 
@@ -165,6 +166,7 @@ protected:
     int imageWidth;
     int imageHeight;
 
+    std::shared_ptr<FeatureMatcher> matcher;
 };
 
 } //namespace ORB_SLAM
