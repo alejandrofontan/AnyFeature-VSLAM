@@ -3,9 +3,10 @@
 # sift128 parameters
 
 # Feature Extractor 
-FeatureExtractor.numOctaves: 8
+FeatureExtractor.nOctaves: 4
 FeatureExtractor.scaleFactor: 2.0
-FeatureExtractor.detectionTh: 5.0
+FeatureExtractor.detectTh: 0.0066
+FeatureExtractor.maxNumFeatures: 2000
 
 # Feature Matcher 
 FeatureMatcher.TH_LOW: 0.5
