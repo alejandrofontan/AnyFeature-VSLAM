@@ -146,10 +146,10 @@ void Viewer::Run()
     while(1)
     {
         numIt++;
-        if (numIt < 500) {
-            usleep(3000);
-            continue;
-        }
+        // if (numIt < 500) {
+        //     usleep(3000);
+        //     continue;
+        // }
 
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         glClearColor(1.0f,1.0f,1.0f,1.0f);

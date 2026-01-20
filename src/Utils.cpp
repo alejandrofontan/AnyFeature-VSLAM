@@ -4,9 +4,11 @@
 
 #include <fstream>
 #include "Utils.h"
+#include <utility>  
 
 std::random_device rd;
-std::mt19937 ANYFEATURE_VSLAM::RandomIntegerGenerator::randomIntGenerator{std::mt19937(rd())};
+//std::mt19937 ANYFEATURE_VSLAM::RandomIntegerGenerator::randomIntGenerator{std::mt19937(rd())};
+std::mt19937 ANYFEATURE_VSLAM::RandomIntegerGenerator::randomIntGenerator{123456u};
 
 void ANYFEATURE_VSLAM::printInfo(const std::string& function, const std::string& message,
                           const VerbosityLevel& verbosityLevel, const VerbosityLevel& verbosityLevelRequired,

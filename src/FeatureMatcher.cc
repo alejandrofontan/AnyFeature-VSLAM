@@ -107,6 +107,13 @@ int FeatureMatcher::SearchForInitialization(const Frame &F1, const Frame &F2,
     int numMatches = 0;
     matches12 = vector<int>(F1.mvKeysUn.at(featType).size(),-1);
     for(const auto& m : matches) {
+        if (F1.keyPtsSize.at(featType)[m.queryIdx] > 1.0)
+            continue;
+        if (F2.keyPtsSize.at(featType)[m.trainIdx] > 1.0)
+            continue;
+        if (F1.keyPtsSize.at(featType)[m.queryIdx] != F2.keyPtsSize.at(featType)[m.trainIdx])
+            continue;
+
         matches12[m.queryIdx] = m.trainIdx;
         pointsPrevMatched[m.queryIdx] = F2.mvKeysUn.at(featType)[m.trainIdx].pt;
         numMatches++;
