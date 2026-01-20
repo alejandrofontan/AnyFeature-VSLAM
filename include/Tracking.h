@@ -142,7 +142,7 @@ protected:
     void CreateInitialMapMonocular(const FeatureType& featureType);
 
     void CheckReplacedInLastFrame();
-    bool TrackReferenceKeyFrame();
+    bool TrackReferenceKeyFrame(const bool& optimizePose = true);
     void UpdateLastFrame();
     bool TrackWithMotionModel();
 
@@ -163,7 +163,6 @@ protected:
                                                      const string &featureSettingsYamlFile, 
                                                      const FeatureType& featureType);
     static void getGrayImage(cv::Mat& im, const bool& rgb);
-
 
     // In case of performing only localization, this flag is true when there are no matches to
     // points in the map. Still tracking will continue if there are enough matches with temporal points.
@@ -349,6 +348,9 @@ protected:
     const int minKeypointsStereo{500};
 
     std::shared_ptr<FeatureMatcher> matcher;
+    
+    bool emergencyKeyframe{false};
+
 };
 
 } //namespace ORB_SLAM

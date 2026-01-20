@@ -45,20 +45,31 @@ public:
     static Descriptor_Distance_Type DescriptorDistance(const cv::Mat &a, const cv::Mat &b, const DescriptorType& descriptorType_);
     cv::NormTypes getNormType(const FeatureType& featureType_);
     std::vector<cv::DMatch> featureMatching(const cv::Mat& desc1, const cv::Mat& desc2, const FeatureType& ft);
-    std::vector<cv::DMatch> featureMatching(const cv::Mat& desc1, const cv::Mat& desc2,  const std::vector<cv::KeyPoint>& kps1, const std::vector<cv::KeyPoint>& kps2, const FeatureType& ft);
+
+    std::vector<cv::DMatch> featureMatching(const cv::Mat& desc1, const cv::Mat& desc2,  const std::vector<cv::KeyPoint>& kps1, const std::vector<cv::KeyPoint>& kps2, const FeatureType& ft, 
+       bool lightglue = true , bool robustMatching = true, int outlierMehod = cv::FM_RANSAC);
+
     std::vector<cv::DMatch> lightglueMatching(
             const std::vector<cv::KeyPoint>& kps1, const cv::Mat& desc1,
             const std::vector<cv::KeyPoint>& kps2, const cv::Mat& desc2,
             float min_score = 0.0f);
+    std::vector<cv::DMatch> robustFeatureMatching(std::vector<cv::DMatch>& matches, const std::vector<cv::KeyPoint>& kps1, const std::vector<cv::KeyPoint>& kps2, int outlierMehod = cv::FM_RANSAC);        
+
+    // AllFeature-VSLAM SearchBruteForce         
+    int SearchBruteForce(const Keyframe& keyframe, const Frame &frame, vector<Pt>& mapPointMatches, const FeatureType& featType);
+    
+    int SearchForInitialization(const Frame &F1, const Frame &F2, std::vector<cv::Point2f> &pointsPrevMatched, std::vector<int> &matches12, const FeatureType& featureType);
+
+    int SearchForTriangulation(const Keyframe& keyframe1, const Keyframe& keyframe2, const mat3f& F12,
+                               std::vector<pair<size_t, size_t> > &matchedPairs, const FeatureType& featureType);
+
+    int SearchBruteForce(Frame &CurrentFrame, const Frame &LastFrame, const FeatureType& featureType);
+
 
     // Search matches between Frame keypoints and projected MapPoints. Returns number of matches
     // Used to track the local map (Tracking)
     int SearchByProjection(Frame &F, const std::vector<Pt> &vpMapPoints, const float& radiusTh);
     int SearchByProjection(Frame &Frame, const vector<Pt> &mapPoints);
-
-    // Project MapPoints tracked in last frame into the current frame and search matches.
-    // Used to track from previous frame (Tracking)
-    int SearchByProjection(Frame &CurrentFrame, const Frame &LastFrame, const float& radiusTh, const bool bMono, const FeatureType& featureType);
 
     // Project MapPoints seen in KeyFrame into the Frame and search matches.
     // Used in relocalisation (Tracking)
@@ -71,17 +82,7 @@ public:
     // Search matches between MapPoints in a KeyFrame and ORB in a Frame.
     // Brute force constrained to ORB that belong to the same vocabulary node (at a certain level)
     // Used in Relocalisation and Loop Detection
-    int SearchByBoW(const Keyframe& keyframe, const Frame &frame, vector<Pt>& mapPointMatches, const FeatureType& featType);
     int SearchByBoW(Keyframe pKF1, Keyframe pKF2, std::vector<Pt> &vpMatches12, const FeatureType& featureType);
-
-    // Matching for the Map Initialization (only used in the monocular case)
-    int SearchForInitialization(Frame &F1, Frame &F2, std::vector<cv::Point2f> &vbPrevMatched, std::vector<int> &vnMatches12, const int& windowSize, 
-        const DescriptorType& descriptorType, const FeatureType& featureType);
-
-    // Matching to triangulate new MapPoints. Check Epipolar Constraint.
-    int SearchForTriangulation(const Keyframe& keyframe1, const Keyframe& keyframe2, const mat3f& F12,
-                               std::vector<pair<size_t, size_t> > &matchedPairs, 
-                               const FeatureType& featureType);
 
     // Search matches between MapPoints seen in KF1 and KF2 transforming by a Sim3 [s12*R12|t12]
     // In the stereo and RGB-D case, s12=1
@@ -93,16 +94,15 @@ public:
     // Project MapPoints into KeyFrame using a given Sim3 and search for duplicated MapPoints.
     int Fuse(Keyframe pKF, const mat4f& Scw, const std::vector<Pt> &vpPoints, const float& radiusTh, vector<Pt> &vpReplacePoint, const FeatureType& featureType);
 
-    static void setDescriptorDistanceThresholds(const std::vector<Descriptor_Distance_Type>& descriptorDistances_, const std::vector<int>& numCandidates_,const DescriptorType& descriptorType);
-    static void setDescriptorDistanceThresholds(const string &feature_settings_yaml_file);
+    static void setDescriptorDistanceThresholds(const string &feature_settings_yaml_file, const FeatureType& featureType);
 
 public:
 
     static VerbosityLevel verbosity;
-    static Descriptor_Distance_Type TH_LOW;
-    static Descriptor_Distance_Type TH_HIGH;
-    static Descriptor_Distance_Type descDistTh_high_reloc;
-    static Descriptor_Distance_Type descDistTh_low_reloc;
+    static std::map<FeatureType, Descriptor_Distance_Type> TH_LOW;
+    static std::map<FeatureType, Descriptor_Distance_Type> TH_HIGH;
+    static std::map<FeatureType, Descriptor_Distance_Type> descDistTh_high_reloc;
+    static std::map<FeatureType, Descriptor_Distance_Type> descDistTh_low_reloc;
 
     static const int HISTO_LENGTH;
     static float radiusScale;
@@ -134,6 +134,32 @@ protected:
     std::shared_ptr<torch::Device> torch_device;
     int imageWidth;
     int imageHeight;
+
+    // Matching options
+
+    // SearchBruteForce Keyframe-Frame
+    // Tracking::TrackReferenceKeyframe & Tracking::Relocalization
+    static const bool sBF_kf_lightglue = true;
+    static const bool sBF_kf_robustMatching = true;
+    static const int  sBF_kf_outlierMethod = cv::FM_LMEDS;
+
+    // SearchForInitialization Frame-Frame
+    // Tracking::MonocularInitialization
+    static const bool sFI_ff_lightglue = true;
+    static const bool sFI_ff_robustMatching = true;
+    static const int  sFI_ff_outlierMethod = cv::FM_LMEDS;  
+    
+    // SearchForTriangulation Keyframe-Keyframe
+    // LocalMapping::CreateNewMapPoints
+    static const bool sFT_kk_lightglue = true;
+    static const bool sFT_kk_robustMatching = true;
+    static const int  sFT_kk_outlierMethod = cv::FM_LMEDS;   
+    
+    // SearchBruteForce Frame-Frame
+    // Tracking::TrackWithMotionModel
+    static const bool sBF_ff_lightglue = true;
+    static const bool sBF_ff_robustMatching = true;
+    static const int  sBF_ff_outlierMethod = cv::FM_LMEDS;       
 };
 
 }// namespace ORB_SLAM

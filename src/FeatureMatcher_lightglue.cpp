@@ -118,6 +118,5 @@ static std::vector<cv::DMatch> lightglue_to_dmatches(
         const auto& matches0 = matches01.at("matches0");
         const auto& scores0  = matches01.at("matching_scores0");
         std::vector<cv::DMatch> matches = lightglue_to_dmatches(matches0, &scores0, min_score);    
-        std::cout << "LightGlue found " << matches.size() << " matches." << std::endl;
         return matches;
     }

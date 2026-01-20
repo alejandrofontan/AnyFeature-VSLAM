@@ -25,6 +25,8 @@
 #include "Converter.h"
 
 #include<mutex>
+#include <Eigen/Core>
+#include <Eigen/SVD>
 
 namespace ANYFEATURE_VSLAM
 {
@@ -80,8 +82,8 @@ void LocalMapping::Run()
             }
 
             mbAbortBA = false;
-
-            if(!CheckNewKeyFrames() && !stopRequested())
+            //if(!CheckNewKeyFrames() && !stopRequested())
+            if(!CheckNewKeyFrames())
             {
                 // Local BA
                 if(mpMap->KeyFramesInMap()>2)
@@ -90,9 +92,7 @@ void LocalMapping::Run()
                 // Check redundant local Keyframes
                 KeyFrameCulling();
             }
-
             loopCloser->InsertKeyFrame(mpCurrentKeyFrame);
-
             std::chrono::steady_clock::time_point t_end = std::chrono::steady_clock::now();
             double t_duration = std::chrono::duration_cast<std::chrono::duration<double> >(t_end - t_start).count();
             localMappingTime.push_back(t_duration);
@@ -107,7 +107,6 @@ void LocalMapping::Run()
             if(CheckFinish())
                 break;
         }
-
         ResetIfRequested();
 
         // Tracking will see that Local Mapping is busy
@@ -251,8 +250,6 @@ void LocalMapping::CreateNewMapPoints()
     mpCurrentKeyFrame->getFullIntrinsics(fx1, fy1, cx1, cy1, invfx1, invfy1);
 
     // Search matches with epipolar restriction and triangulate
-    const float ratioFactor = CREATE_NEW_MAP_POINTS_RATIO_FACTOR * mpCurrentKeyFrame->sizeTolerance;
-
     std::map<FeatureType, int> newMapPoints;
     for(size_t i{0}; i < vpNeighKFs.size(); i++)
     {
@@ -273,19 +270,11 @@ void LocalMapping::CreateNewMapPoints()
         vec3f vBaseline = twc2 - twc1;
         const float baseline = vBaseline.norm();
 
-        if(!mbMonocular)
-        {
-            if(baseline < pKF2->mb)
-            continue;
-        }
-        else
-        {
-            const float medianDepthKF2 = pKF2->ComputeSceneMedianDepth(2);
-            const float ratioBaselineDepth = baseline / medianDepthKF2;
+        const float medianDepthKF2 = pKF2->ComputeSceneMedianDepth(2);
+        const float ratioBaselineDepth = baseline/medianDepthKF2;
 
-            if(ratioBaselineDepth < CREATE_NEW_MAP_POINTS_RATIO_BASELINE_DEPTH)
-                continue;
-        }
+        if(ratioBaselineDepth<0.01)
+            continue;
 
         // Compute Fundamental Matrix
         mat3f F12 = ComputeF12(mpCurrentKeyFrame, pKF2);
@@ -304,12 +293,7 @@ void LocalMapping::CreateNewMapPoints()
                 const int &idx2 = vMatchedIndices.at(featureType)[ikp].second;
 
                 const cv::KeyPoint &kp1 = mpCurrentKeyFrame->mvKeysUn.at(featureType)[idx1];
-                const float kp1_ur=mpCurrentKeyFrame->mvuRight.at(featureType)[idx1];
-                bool bStereo1 = kp1_ur>=0;
-
                 const cv::KeyPoint &kp2 = pKF2->mvKeysUn.at(featureType)[idx2];
-                const float kp2_ur = pKF2->mvuRight.at(featureType)[idx2];
-                bool bStereo2 = kp2_ur>=0;
 
                 // Check parallax between rays
                 vec3f xn1{(kp1.pt.x-cx1)*invfx1, (kp1.pt.y-cy1)*invfy1, 1.0f};
@@ -318,50 +302,34 @@ void LocalMapping::CreateNewMapPoints()
                 vec3f ray1 = Rwc1 * xn1;
                 vec3f ray2 = Rwc2 * xn2;
                 const float cosParallaxRays = ray1.dot(ray2)/(ray1.norm() * ray2.norm());
+                const float sinParallaxRays = ray1.cross(ray2).norm() / (ray1.norm() * ray2.norm());
 
                 float cosParallaxStereo = cosParallaxRays+1;
-                float cosParallaxStereo1 = cosParallaxStereo;
-                float cosParallaxStereo2 = cosParallaxStereo;
 
-                if(bStereo1)
-                    cosParallaxStereo1 = cos(2*atan2(mpCurrentKeyFrame->mb/2,mpCurrentKeyFrame->mvDepth.at(featureType)[idx1]));
-                else if(bStereo2)
-                    cosParallaxStereo2 = cos(2*atan2(pKF2->mb/2,pKF2->mvDepth.at(featureType)[idx2]));
-
-                cosParallaxStereo = min(cosParallaxStereo1,cosParallaxStereo2);
                 vec3f x3D;
-                if(cosParallaxRays<cosParallaxStereo && cosParallaxRays>0 && (bStereo1 || bStereo2 || cosParallaxRays<0.9998))
+                const float sinThr = std::sqrt(1.0f - 0.9998f*0.9998f);
+                //if(true)
+                if(cosParallaxRays > 0 && (sinParallaxRays > sinThr))
+                //if(cosParallaxRays > 0 && (cosParallaxRays<0.9998))
                 {
-                    // Linear Triangulation Method
-                    mat4f A_tmp{};
-                    A_tmp.row(0) = xn1(0) * Tcw1.row(2) - Tcw1.row(0);
-                    A_tmp.row(1) = xn1(1) * Tcw1.row(2) - Tcw1.row(1);
-                    A_tmp.row(2) = xn2(0) * Tcw2.row(2) - Tcw2.row(0);
-                    A_tmp.row(3) = xn2(1) * Tcw2.row(2) - Tcw2.row(1);
+                    Eigen::Matrix<float, 4, 4> A;
+                        A.row(0) = xn1(0) * Tcw1.row(2) - Tcw1.row(0);
+                        A.row(1) = xn1(1) * Tcw1.row(2) - Tcw1.row(1);
+                        A.row(2) = xn2(0) * Tcw2.row(2) - Tcw2.row(0);
+                        A.row(3) = xn2(1) * Tcw2.row(2) - Tcw2.row(1);
 
-                    cv::Mat A(4,4,CV_32F);
-                    A = Converter::toCvMat(A_tmp).clone();
+                    Eigen::JacobiSVD<Eigen::Matrix<float,4,4>> svd(
+                        A, Eigen::ComputeFullV
+                    );  
 
-                    cv::Mat w,u,vt;
-                    cv::SVD::compute(A,w,u,vt,cv::SVD::MODIFY_A| cv::SVD::FULL_UV);
+                    const Eigen::Matrix<float,4,4>& V = svd.matrixV();
+                    Eigen::Vector4f x_h = V.col(3); 
 
-                    cv::Mat x3D_tmp;
-                    x3D_tmp = vt.row(3).t();
-
-                    if(x3D_tmp.at<float>(3) == 0)
+                    const float w = x_h(3);
+                    if (std::abs(w) < 1e-12f)
                         continue;
 
-                    // Euclidean coordinates
-                    x3D_tmp = x3D_tmp.rowRange(0,3)/x3D_tmp.at<float>(3);
-                    x3D = Converter::toVector3f(x3D_tmp);
-                }
-                else if(bStereo1 && cosParallaxStereo1<cosParallaxStereo2)
-                {
-                    x3D = mpCurrentKeyFrame->UnprojectStereo(idx1);                
-                }
-                else if(bStereo2 && cosParallaxStereo2<cosParallaxStereo1)
-                {
-                    x3D = pKF2->UnprojectStereo(idx2);
+                    x3D = x_h.head<3>() / w; 
                 }
                 else
                     continue; //No stereo and very low parallax
@@ -381,72 +349,39 @@ void LocalMapping::CreateNewMapPoints()
                 const float y1 = Rcw1.row(1).dot(x3D) + tcw1(1);
                 const float invz1 = 1.0f / z1;
 
-                if(!bStereo1)
-                {
-                    float u1 = fx1*x1*invz1+cx1;
-                    float v1 = fy1*y1*invz1+cy1;
-                    float errX1 = u1 - kp1.pt.x;
-                    float errY1 = v1 - kp1.pt.y;
-                    if((errX1*errX1+errY1*errY1)>5.991*sigmaSquare1)
-                        continue;
-                }
-                else
-                {
-                    float u1 = fx1*x1*invz1+cx1;
-                    float u1_r = u1 - mpCurrentKeyFrame->mbf*invz1;
-                    float v1 = fy1*y1*invz1+cy1;
-                    float errX1 = u1 - kp1.pt.x;
-                    float errY1 = v1 - kp1.pt.y;
-                    float errX1_r = u1_r - kp1_ur;
-                    if((errX1*errX1+errY1*errY1+errX1_r*errX1_r)>7.8*sigmaSquare1)
-                        continue;
-                }
 
-                //Check reprojection error in second keyframe
+                float u1 = fx1*x1*invz1+cx1;
+                float v1 = fy1*y1*invz1+cy1;
+                float errX1 = u1 - kp1.pt.x;
+                float errY1 = v1 - kp1.pt.y;
+                if((errX1*errX1+errY1*errY1)>5.991*sigmaSquare1)
+                    continue;
+                
+                // Check reprojection error in second keyframe
                 const float sigmaSquare2 = pKF2->GetKeyPt1DSigma2(idx2, featureType);
                 const float x2 = Rcw2.row(0).dot(x3D) + tcw2(0);
                 const float y2 = Rcw2.row(1).dot(x3D) + tcw2(1);
                 const float invz2 = 1.0f / z2;
-                if(!bStereo2)
-                {
-                    float u2 = fx2*x2*invz2+cx2;
-                    float v2 = fy2*y2*invz2+cy2;
-                    float errX2 = u2 - kp2.pt.x;
-                    float errY2 = v2 - kp2.pt.y;
-                    if((errX2*errX2+errY2*errY2)>5.991*sigmaSquare2)
-                        continue;
-                }
-                else
-                {
-                    float u2 = fx2*x2*invz2+cx2;
-                    float u2_r = u2 - mpCurrentKeyFrame->mbf*invz2;
-                    float v2 = fy2*y2*invz2+cy2;
-                    float errX2 = u2 - kp2.pt.x;
-                    float errY2 = v2 - kp2.pt.y;
-                    float errX2_r = u2_r - kp2_ur;
-                    if((errX2*errX2+errY2*errY2+errX2_r*errX2_r)>7.8*sigmaSquare2)
-                        continue;
-                }
 
-                //Check scale consistency
+                float u2 = fx2*x2*invz2+cx2;
+                float v2 = fy2*y2*invz2+cy2;
+                float errX2 = u2 - kp2.pt.x;
+                float errY2 = v2 - kp2.pt.y;
+                if((errX2*errX2+errY2*errY2)>5.991*sigmaSquare2)
+                    continue;
+                
+                // Check scale consistency
                 vec3f normal1 = x3D - twc1;
                 float dist1 = normal1.norm();
 
                 vec3f normal2 = x3D - twc2;
                 float dist2 = normal2.norm();
 
-                if(dist1==0 || dist2==0)
-                    continue;
-
-                const float ratioDist = dist2/dist1;
-                const float ratioOctave = mpCurrentKeyFrame->GetKeyPtSize(idx1, featureType) / pKF2->GetKeyPtSize(idx2, featureType);
-
-                if(ratioDist * ratioFactor < ratioOctave || ratioDist > ratioOctave * ratioFactor)
+                if(dist1 == 0 || dist2 == 0)
                     continue;
 
                 // Triangulation is succesfull
                 newMapPoints[featureType]++;   
-                
                 Pt pMP = mpCurrentKeyFrame->CreateMonocularMapPoint(x3D, KeypointIndex(idx1),
                                                                     pKF2,  KeypointIndex(idx2),
                                                                     featureType);                                        
@@ -454,9 +389,9 @@ void LocalMapping::CreateNewMapPoints()
             }
         }
     }
-    for (const auto& [featureType, count] : newMapPoints) {
-        std::cout << "Created " << count << " new map points for feature " << featureType << std::endl;
-    }
+    // for (const auto& [featureType, count] : newMapPoints) {
+    //     std::cout << "Created " << count << " new map points for feature " << featureType << std::endl;
+    // }
 }
 
 void LocalMapping::SearchInNeighbors(const FeatureType& featureType)
@@ -492,8 +427,8 @@ void LocalMapping::SearchInNeighbors(const FeatureType& featureType)
     for(vector<Keyframe >::iterator vit=vpTargetKFs.begin(), vend=vpTargetKFs.end(); vit!=vend; vit++)
     {
         Keyframe  pKFi = *vit;
-
-        matcher->Fuse(pKFi,vpMapPointMatches,3.0f, featureType);
+        if (featureType == FEAT_ORB)
+            matcher->Fuse(pKFi,vpMapPointMatches,3.0f, featureType);
     }
 
     // Search matches by projection from target KFs in current KF
@@ -518,7 +453,8 @@ void LocalMapping::SearchInNeighbors(const FeatureType& featureType)
         }
     }
 
-    matcher->Fuse(mpCurrentKeyFrame,vpFuseCandidates,3.0f, featureType);
+    if (featureType == FEAT_ORB)
+        matcher->Fuse(mpCurrentKeyFrame,vpFuseCandidates,3.0f, featureType);
 
     // Update points
     vpMapPointMatches = mpCurrentKeyFrame->GetMapPointMatches(featureType);
@@ -672,7 +608,7 @@ void LocalMapping::KeyFrameCulling()
                         nMPs++;
                         if(pMP->NumberOfObservations() > thObs)
                         {
-                            const float keyPtSize = pKF->GetKeyPtSize(KeypointIndex(i), featType);
+                            //const float keyPtSize = pKF->GetKeyPtSize(KeypointIndex(i), featType);
                             const map<KeyframeId , Obs> observations = pMP->GetObservations();
                             int nObs=0;
                             for(auto& obs: observations)
@@ -684,14 +620,14 @@ void LocalMapping::KeyFrameCulling()
                                 if(keyframe_i->isBad())
                                     continue;
     // #endif
-                                const float keyPtSize_i = keyframe_i->GetKeyPtSize(obs.second->projIndex, featType);
+                                //const float keyPtSize_i = keyframe_i->GetKeyPtSize(obs.second->projIndex, featType);
 
-                                if(keyPtSize_i <= keyPtSize * keyframe_i->sizeTolerance)
-                                {
+                                //if(keyPtSize_i <= keyPtSize * keyframe_i->sizeTolerance)
+                                //{
                                     nObs++;
                                     if(nObs>=thObs)
                                         break;
-                                }
+                                //}
                             }
                             if(nObs>=thObs)
                             {
@@ -701,31 +637,12 @@ void LocalMapping::KeyFrameCulling()
                     }
                 }
             }
-            if(nRedundantObservations > covisibilityThreshold * nMPs){
-    //#ifndef VANILLA_ORB_SLAM2
-                /*bool cull = true;
-                if(keyframes_to_positions[pKF->keyId].empty())
-                    cull = false;
-
-                for(auto& position: keyframes_to_positions[pKF->keyId]){ // Positions associated with keyframe pKF
-                    if(positions_to_keyframes[position].size() < 2) // Keyframes associated with position
-                    {
-                        cull = false;
-                        continue;
-                    }
-                }
-
-                if(cull){
-                    for(auto& position: keyframes_to_positions[pKF->keyId]){ // Positions associated with keyframe pKF
-                        positions_to_keyframes[position].erase(pKF->keyId); // Keyframes associated with position
-                    }
-                    keyframes_to_positions[pKF->keyId].clear();
+            if(nRedundantObservations > covisibilityThreshold * nMPs){  
+                if ((int(pKF->mnFrameId) % 10) != 0 && (int(pKF->keyId) % 5) != 0){
+                    //std::cout << "Local Mapping: Cull KeyFrame " << pKF->mnFrameId << std::endl;
                     pKF->SetBadFlag();
-                }*/
-    //#else     
-                //if (pKF->mnFrameId % 1000 == 0)
-                pKF->SetBadFlag();
-    //#endif
+                    break;
+                }  
             }
     }
     }

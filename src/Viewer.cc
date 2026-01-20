@@ -142,8 +142,15 @@ void Viewer::Run()
     //d_cam_aerial.SetBounds(margin,  0.5f + margin, 0.01 , wS);
 
 
+    int numIt{-1};
     while(1)
     {
+        numIt++;
+        if (numIt < 500) {
+            usleep(3000);
+            continue;
+        }
+
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         glClearColor(1.0f,1.0f,1.0f,1.0f);
 

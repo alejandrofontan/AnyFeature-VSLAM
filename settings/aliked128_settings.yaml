@@ -6,7 +6,7 @@
 FeatureExtractor.nOctaves: 8
 FeatureExtractor.scaleFactor: 2.0
 FeatureExtractor.detectTh: 5.0
-FeatureExtractor.maxNumFeatures: 2000
+FeatureExtractor.maxNumFeatures: 1000
 
 # Feature Matcher 
 FeatureMatcher.TH_LOW: 1.5

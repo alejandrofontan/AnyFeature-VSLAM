@@ -33,7 +33,17 @@ static cv::Mat tensorDescToMatCopy(const at::Tensor& desc_in) {
 }
 
 void ANYFEATURE_VSLAM::FeatureExtractor_aliked128::detectAndCompute(const Image& img, std::vector<cv::KeyPoint>& keypoints, cv::Mat& descriptors){
-    cv::Mat img_ = img.img.clone();   
+    cv::Mat img_;
+    if (img.img.channels() == 3) {
+        img_ = img.img.clone();
+    } else if (img.img.channels() == 1) {
+        cv::cvtColor(img.img, img_, cv::COLOR_GRAY2RGB); 
+    } else if (img.img.channels() == 4) {
+        cv::cvtColor(img.img, img_, cv::COLOR_BGRA2RGB);
+    } else {
+        throw std::runtime_error("Unsupported number of channels");
+    }
+
     auto feats0 = extractor->run(img_);
 
     const auto& kpts = feats0.at("keypoints");

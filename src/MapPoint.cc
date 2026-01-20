@@ -407,7 +407,7 @@ void MapPoint::UpdateNormalAndDepth()
         unique_lock<mutex> lock3(mMutexPos);
 
         refDistance = dist;
-        refSize  = refKeyframe_->GetKeyPtSize(keyPtIdx, featureType);
+        refSize  = 1.5; // refKeyframe_->GetKeyPtSize(keyPtIdx, featureType);
         refSigma = refKeyframe_->GetKeyPt1DSigma(keyPtIdx, featureType);
 
         maxDistance = dist * levelScaleFactor;

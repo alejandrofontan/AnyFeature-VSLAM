@@ -98,8 +98,9 @@ System::System(const string &vocabularyFolder,
     mapDrawer = make_shared<MapDrawer>(mpMap, strSettingsFile,featureTypes);
 
     // Initialize matching thresholds
-    FeatureMatcher::setDescriptorDistanceThresholds(feature_settings_yaml_file.at(featureTypes[0]));
-
+    for (const auto& featureType : featureTypes)
+         FeatureMatcher::setDescriptorDistanceThresholds(feature_settings_yaml_file.at(featureType), featureType);
+    
     //Initialize the Tracking thread
     //(it will live in the main thread of execution, the one that called this constructor)
     tracker = make_shared<Tracking>(this, vocabulary, frameDrawer, mapDrawer,

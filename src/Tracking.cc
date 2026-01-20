@@ -1,22 +1,4 @@
-/**
-* This file is part of ORB-SLAM2.
-*
-* Copyright (C) 2014-2016 Raúl Mur-Artal <raulmur at unizar dot es> (University of Zaragoza)
-* For more information see <https://github.com/raulmur/ORB_SLAM2>
-*
-* ORB-SLAM2 is free software: you can redistribute it and/or modify
-* it under the terms of the GNU General Public License as published by
-* the Free Software Foundation, either version 3 of the License, or
-* (at your option) any later version.
-*
-* ORB-SLAM2 is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-* GNU General Public License for more details.
-*
-* You should have received a copy of the GNU General Public License
-* along with ORB-SLAM2. If not, see <http://www.gnu.org/licenses/>.
-*/
+
 
 
 #include "Tracking.h"
@@ -78,8 +60,7 @@ Tracking::Tracking(System *pSys, shared_ptr<Vocabulary> vocabulary,
     for (auto& ft: featureTypes){
         featureExtractorLeft[ft] = Tracking::getFeatureExtractor(1, std::string(feature_settings_yaml_file.at(ft)), ft);
     }
-    //if(sensor==System::STEREO)
-        //featureExtractorRight = std::make_shared<FeatureExtractor>(numFeatures,extractorSettings);
+
     if(sensor==System::MONOCULAR)
         initFeatureExtractor[featureTypes[featureInitialization]] = Tracking::getFeatureExtractor(scaleNumFeaturesMonocular , 
             feature_settings_yaml_file.at(featureTypes[featureInitialization]), featureTypes[featureInitialization]); 
@@ -107,16 +88,6 @@ mat4f Tracking::GrabImageStereo(const cv::Mat &imRectLeft, const cv::Mat &imRect
 {
     std::cout << "This function (Tracking::GrabImageStereo) has not been modified yet to work with AnyFeature-VSLAM"<< endl;
     std::terminate();
-    // mImGray = imRectLeft;
-    // cv::Mat imGrayRight = imRectRight;
-    // getGrayImage(mImGray,mbRGB);
-    // getGrayImage(imGrayRight,mbRGB);
-
-    // currentFrame = Frame(mImGray,imGrayRight,timestamp,featureExtractorLeft,featureExtractorRight,vocabulary,mK,mDistCoef,mbf,mThDepth);
-
-    // Track();
-
-    // return currentFrame.Tcw;
 }
 
 
@@ -124,27 +95,14 @@ mat4f Tracking::GrabImageRGBD(const cv::Mat &imRGB,const cv::Mat &imD, const dou
 {
     std::cout << "This function (Tracking::GrabImageStereo) has not been modified yet to work with AnyFeature-VSLAM"<< endl;
     std::terminate();
-    // mImGray = imRGB;
-    // cv::Mat imDepth = imD;
-
-    // getGrayImage(mImGray,mbRGB);
-
-    // if((fabs(mDepthMapFactor-1.0f) > mDepthMapFactor_th) || imDepth.type()!=CV_32F)
-    //     imDepth.convertTo(imDepth,CV_32F,mDepthMapFactor);
-
-    // currentFrame = Frame(mImGray,imDepth,timestamp,featureExtractorLeft,vocabulary,mK,mDistCoef,mbf,mThDepth);
-
-    // Track();
-
-    // return currentFrame.Tcw;
 }
 
 
 mat4f Tracking::GrabImageMonocular(Image &im, const double &timestamp)
 {   
     im.GetGrayImage(mbRGB);
-    if(fixImageSize)
-        im.FixImageSize(w,h);
+    //if(fixImageSize)
+        // im.FixImageSize(w,h);
 
     mImGray = im.grayImg;
 
@@ -196,15 +154,16 @@ void Tracking::Track()
             {
                 // Local Mapping might have changed some MapPoints tracked in last frame
                 CheckReplacedInLastFrame();
-                if((mVelocity(3,3) != 1.0f) || currentFrame.mnId<lastRelocFrameId+2)
-                {   
+                bool trackReferenceKeyframe = (mVelocity(3,3) != 1.0f) || (currentFrame.mnId < lastRelocFrameId+2) 
+                    || (lastFrame.mnId == refKeyframe->mnFrameId);
+
+                if(trackReferenceKeyframe)
                     bOK = TrackReferenceKeyFrame();
-                }
                 else
                 {
                     bOK = TrackWithMotionModel();
-                    if(!bOK)
-                        bOK = TrackReferenceKeyFrame();
+                    bool optimizePose = !bOK;
+                    bOK = TrackReferenceKeyFrame(optimizePose);
                 }
             }
             else
@@ -346,6 +305,7 @@ void Tracking::Track()
             mlpTemporalPoints.clear();
 
             // Check if we need to insert a new keyframe
+
             if(NeedNewKeyFrame())
                 CreateNewKeyFrame();
             // We allow points with high innovation (considererd outliers by the Huber Function)
@@ -394,6 +354,23 @@ void Tracking::Track()
         mlFrameTimes.push_back(mlFrameTimes.back());
         mlbLost.push_back(mState==LOST);
     }
+
+    // std::cout << "Tracking::Track: end" << std::endl;
+    if (emergencyKeyframe){
+        std::cout << "Tracking::Track: emergency keyframe triggered, waiting for local mapping to be idle..." << std::endl;    
+        lock.unlock();
+        bool localMappingIdle = localMapper->AcceptKeyFrames();
+        while(!localMappingIdle)
+        {
+            // Wait until Local Mapping is idle
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            localMappingIdle = localMapper->AcceptKeyFrames();
+        }
+        emergencyKeyframe = false;
+        std::cout << "Tracking::Track: local mapping is idle, inserting emergency keyframe..." << std::endl;
+    }
+
+
 }
 
 
@@ -401,51 +378,6 @@ void Tracking::StereoInitialization()
 {
     std::cout << "This function (Tracking::StereoInitialization) has not been modified yet to work with AnyFeature-VSLAM"<< endl;
     std::terminate();
-
-    // if(currentFrame.N > minKeypointsStereo)
-    // {
-    //     // Set Frame pose to the origin
-    //     currentFrame.SetPose(mat4f::Identity());
-
-    //     // Create KeyFrame
-    //     Keyframe pKFini = make_shared<KeyFrame>(currentFrame,map,keyFrameDB);
-
-    //     // Insert KeyFrame in the map
-    //     map->AddKeyFrame(pKFini);
-
-    //     // Create MapPoints and asscoiate to KeyFrame
-    //     for(int i=0; i<currentFrame.N;i++)
-    //     {
-    //         float z = currentFrame.mvDepth[i];
-    //         if(z>0)
-    //         {
-    //             vec3f x3D = currentFrame.UnprojectStereo(i);
-    //             Pt pNewMP = pKFini->CreateMapPoint(x3D,KeypointIndex (i),featureTypes[0]);
-    //             currentFrame.pts[i]=pNewMP;
-    //         }
-    //     }
-
-    //     cout << "New map created with " << map->MapPointsInMap() << " points" << endl;
-
-    //     localMapper->InsertKeyFrame(pKFini);
-
-    //     lastFrame = Frame(currentFrame);
-    //     lastKeyFrameId=currentFrame.mnId;
-    //     lastKeyFrame = pKFini;
-
-    //     localKeyframes.push_back(pKFini);
-    //     localPts = map->GetAllMapPoints();
-    //     refKeyframe = pKFini;
-    //     currentFrame.refKeyframe = pKFini;
-
-    //     map->SetReferenceMapPoints(localPts);
-
-    //     map->mvpKeyFrameOrigins.push_back(pKFini);
-
-    //     mapDrawer->SetCurrentCameraPose(currentFrame.Tcw);
-
-    //     mState=OK;
-    // }
 }
 
 void Tracking::MonocularInitialization(const FeatureType& featureType)
@@ -477,9 +409,8 @@ void Tracking::MonocularInitialization(const FeatureType& featureType)
             return;
         }
         // Find correspondences
-        
-        int nmatches = matcher->SearchForInitialization(mInitialFrame,currentFrame,mvbPrevMatched,mvIniMatches,100,
-             descriptorType, featureType);
+
+        int nmatches = matcher->SearchForInitialization(mInitialFrame, currentFrame, mvbPrevMatched, mvIniMatches, featureType);
 
              // Check if there are enough correspondences
         if(nmatches < minMatches_monoInit)
@@ -623,7 +554,7 @@ void Tracking::CheckReplacedInLastFrame()
 }
 
 
-bool Tracking::TrackReferenceKeyFrame()
+bool Tracking::TrackReferenceKeyFrame(const bool& optimizePose)
 {   
     // We perform first an ORB matching with the reference keyframe
     // If enough matches are found we set up a PnP solver
@@ -631,14 +562,21 @@ bool Tracking::TrackReferenceKeyFrame()
 
     int nmatches{0};
     for (auto& [ft, N] : currentFrame.N) {
-        int nmatches_ft = matcher->SearchByBoW(refKeyframe, currentFrame, vpMapPointMatches, ft);
+        int nmatches_ft = matcher->SearchBruteForce(refKeyframe, currentFrame, vpMapPointMatches, ft);
+
         if (nmatches_ft == 0)
             continue;
+
         currentFrame.pts[ft] = vpMapPointMatches;   
         currentFrame.N[ft] = static_cast<int>(vpMapPointMatches.size());
         currentFrame.mvbOutlier[ft] = vector<bool>(vpMapPointMatches.size(), false);
         nmatches += nmatches_ft;   
+        //std::cout << "TrackReferenceKeyFrame: feature type " << ft << ", nmatches " << nmatches_ft << ", opt_flow " << opt_flow << std::endl;
     }
+    
+    if (!optimizePose)
+        return true;
+
     if(nmatches < minMatches_trackRefKey_high)
             return false;
          
@@ -680,62 +618,6 @@ void Tracking::UpdateLastFrame()
 
     if(lastKeyFrameId==lastFrame.mnId || mSensor==System::MONOCULAR || !onlyTracking)
         return;
-
-    // DEACTIVATED FOR ANYFEATURE-VSLAM
-
-    // // Create "visual odometry" MapPoints
-    // // We sort points according to their measured depth by the stereo/RGB-D sensor
-    // vector<pair<float,int> > vDepthIdx;
-    // vDepthIdx.reserve(lastFrame.N);
-    // for(int i=0; i<lastFrame.N;i++)
-    // {
-    //     float z = lastFrame.mvDepth[i];
-    //     if(z>0)
-    //     {
-    //         vDepthIdx.push_back(make_pair(z,i));
-    //     }
-    // }
-
-    // if(vDepthIdx.empty())
-    //     return;
-
-    // sort(vDepthIdx.begin(),vDepthIdx.end());
-
-    // // We insert all close points (depth<mThDepth)
-    // // If less than 100 close points, we insert the 100 closest ones.
-    // int nPoints = 0;
-    // for(size_t j=0; j<vDepthIdx.size();j++)
-    // {
-    //     int i = vDepthIdx[j].second;
-
-    //     bool bCreateNew = false;
-
-    //     Pt pMP = lastFrame.pts[i];
-    //     if(!pMP)
-    //         bCreateNew = true;
-    //     else if(pMP->NumberOfObservations() < 1)
-    //     {
-    //         bCreateNew = true;
-    //     }
-
-    //     if(bCreateNew)
-    //     {
-    //         vec3f x3D = lastFrame.UnprojectStereo(i);
-    //         Pt pNewMP = make_shared<MapPoint>(x3D,map,&lastFrame,i, featureType);
-
-    //         lastFrame.pts[i]=pNewMP;
-
-    //         mlpTemporalPoints.push_back(pNewMP);
-    //         nPoints++;
-    //     }
-    //     else
-    //     {
-    //         nPoints++;
-    //     }
-
-    //     if(vDepthIdx[j].first>mThDepth && nPoints > minNumPoints)
-    //         break;
-    // }
 }
 
 bool Tracking::TrackWithMotionModel()
@@ -760,18 +642,16 @@ bool Tracking::TrackWithMotionModel()
     
     int nmatches{0};
     for (auto& [ft, N] : currentFrame.N) {
-        int nmatches_ft = matcher->SearchByProjection(currentFrame,lastFrame,radiusTh,
-            mSensor==System::MONOCULAR, ft);
-        nmatches += nmatches_ft;
+        nmatches += matcher->SearchBruteForce(currentFrame,lastFrame, ft);
     }
 
     // If few matches, uses a wider window search
     if(nmatches < minMatches_trackMotModel_high)
     {   
+        nmatches = 0;
         for (auto& [ft, N] : currentFrame.N) {
             fill(currentFrame.pts.at(ft).begin(),currentFrame.pts.at(ft).end(),static_cast<Pt>(nullptr));
-            nmatches = matcher->SearchByProjection(currentFrame,lastFrame, radiusTh_scale_trackMotModel * radiusTh, 
-                mSensor==System::MONOCULAR, ft);
+            nmatches += matcher->SearchBruteForce(currentFrame,lastFrame, ft);
         }
     }
 
@@ -882,23 +762,12 @@ bool Tracking::TrackLocalMap()
 
         // Local Mapping accept keyframes?
         bool localMappingIdle = localMapper->AcceptKeyFrames();
+        // if(localMappingIdle)
+        //      return true;
 
         // Check how many "close" points are being tracked and how many could be potentially created.
         int nNonTrackedClose = 0;
         int nTrackedClose= 0;
-        // if((mSensor==System::RGBD) or (mSensor==System::STEREO))
-        // {
-        //     for(int i = 0; i < currentFrame.N; i++)
-        //     {
-        //         if(currentFrame.mvDepth[i] > 0 && currentFrame.mvDepth[i] < mThDepth)
-        //         {
-        //             if(currentFrame.pts[i] && !currentFrame.mvbOutlier[i])
-        //                 nTrackedClose++;
-        //             else
-        //                 nNonTrackedClose++;
-        //         }
-        //     }
-        // }
 
         bool bNeedToInsertClose = (nTrackedClose < minTrackedClose) && (nNonTrackedClose > minNonTrackedClose);
 
@@ -914,12 +783,32 @@ bool Tracking::TrackLocalMap()
         const bool c1a = currentFrame.mnId >= lastKeyFrameId + maxFrames;
         // Condition 1b: More than "MinFrames" have passed and Local Mapping is idle
         const bool c1b = (currentFrame.mnId >= lastKeyFrameId + minFrames && localMappingIdle);
-        //Condition 1c: tracking is weak
+        // Condition 1c: tracking is weak
+        // int numInliers = 0;
+        // int numTotal = 0;
+        // for (const auto& [ft, N] : currentFrame.N) {
+        //     numTotal += N;
+        //     for (const auto& pt: currentFrame.pts.at(ft)) {
+        //         if (pt && (!pt->isBad()))
+        //             numInliers++;
+        //     }
+        // }
+        // std::cout << "Inlier ratio: " << float(numInliers)/float(numTotal) << std::endl;
+        // std::cout << "numInliers: " << numInliers << ", numTotal: " << numTotal << std::endl;
+
         const bool c1c =  mSensor!=System::MONOCULAR && (mnMatchesInliers < nRefMatches * nRefMatchesDrop || bNeedToInsertClose) ;
         // Condition 2: Few tracked points compared to reference keyframe. Lots of visual odometry compared to map matches.
-        const bool c2 = ((mnMatchesInliers<nRefMatches*thRefRatio|| bNeedToInsertClose) && mnMatchesInliers > minMatchesInliers);
+        const bool c2 = ((mnMatchesInliers < nRefMatches * thRefRatio || bNeedToInsertClose) && mnMatchesInliers > minMatchesInliers);
+        // if(c2)
+        //     std::cout << "mnMatchesInliers: " << mnMatchesInliers << ", nRefMatches: " << nRefMatches << ", thRefRatio: " 
+        //         << mnMatchesInliers / float(nRefMatches) << std::endl;
+        if(bNeedToInsertClose)
+            std::terminate();
+        if(c1c)
+            std::terminate();
 
-        if((c1a||c1b||c1c)&&c2)
+        if(c2)
+        //if((c1a||c1b||c1c)&&c2)
         {
             // If the mapping accepts keyframes, insert keyframe.
             // Otherwise, send a signal to interrupt BA
@@ -928,8 +817,10 @@ bool Tracking::TrackLocalMap()
                 return true;
             }
             else
-            {
-                localMapper->InterruptBA();
+            {   
+                if(mnMatchesInliers < nRefMatches * 0.5f)
+                    emergencyKeyframe = true;
+                //localMapper->InterruptBA();
                 if(mSensor!=System::MONOCULAR)
                 {
                     if(localMapper->KeyframesInQueue() < minKeyframesInQueue)
@@ -937,8 +828,10 @@ bool Tracking::TrackLocalMap()
                     else
                         return false;
                 }
-                else
+                else{
                     return false;
+                }
+                    
             }
         }
         else
@@ -954,56 +847,6 @@ bool Tracking::TrackLocalMap()
         refKeyframe = keyframe;
         currentFrame.refKeyframe = keyframe;
 
-        // DEACTIVATED FOR ANYFEATURE-VSLAM
-
-        // if((mSensor == System::RGBD) or (mSensor == System::STEREO)){
-        //     currentFrame.UpdatePoseMatrices();
-
-        //     // We sort points by the measured depth by the stereo/RGBD sensor.
-        //     // We create all those MapPoints whose depth < mThDepth.
-        //     // If there are less than 100 close points we create the 100 closest.
-        //     vector<pair<float,int> > vDepthIdx;
-        //     vDepthIdx.reserve(currentFrame.N);
-        //     for(int i=0; i<currentFrame.N; i++){
-        //         float z = currentFrame.mvDepth[i];
-        //         if(z>0){
-        //             vDepthIdx.push_back(make_pair(z,i));
-        //         }
-        //     }
-
-        //     if(!vDepthIdx.empty()){
-        //         sort(vDepthIdx.begin(),vDepthIdx.end());
-
-        //         int nPoints = 0;
-        //         for(size_t j=0; j<vDepthIdx.size();j++){
-        //             int i = vDepthIdx[j].second;
-
-        //             bool bCreateNew = false;
-
-        //             Pt pMP = currentFrame.pts[i];
-        //             if(!pMP)
-        //                 bCreateNew = true;
-        //             else if(pMP->NumberOfObservations() < 1){
-        //                 bCreateNew = true;
-        //                 currentFrame.pts[i] = static_cast<Pt>(nullptr);
-        //             }
-
-        //             if(bCreateNew){
-        //                 vec3f x3D = currentFrame.UnprojectStereo(i);
-        //                 Pt pNewMP = keyframe->CreateMapPoint(x3D,KeypointIndex (i), featureType);
-
-        //                 currentFrame.pts[i]=pNewMP;
-        //                 nPoints++;
-        //             }
-        //             else{
-        //                 nPoints++;
-        //             }
-
-        //             if(vDepthIdx[j].first>mThDepth && nPoints > minNumPoints_createNewKey)
-        //                 break;
-        //         }
-        //     }
-        // }
         localMapper->InsertKeyFrame(keyframe);
         localMapper->SetNotStop(false);
         lastKeyFrameId = currentFrame.mnId;
@@ -1209,7 +1052,7 @@ bool Tracking::Relocalization(const FeatureType& featureType)
             vbDiscarded[i] = true;
         else
         {
-            int nmatches = matcher->SearchByBoW(pKF,currentFrame,vvpMapPointMatches[i], featureType);
+            int nmatches = matcher->SearchBruteForce(pKF, currentFrame, vvpMapPointMatches[i], featureType);
             if(nmatches < minNmatches)
             {
                 vbDiscarded[i] = true;
@@ -1446,18 +1289,19 @@ void Tracking::loadCameraParameters(const string &strCalibrationPath, const stri
     h = cam["image_dimension"][1].as<int>();
 
     // if(fixImageSize){
-    //     float ratio = float(w) / float(h);
-    //     int new_h = (int) sqrt(307200.f / ratio);
-    //     int new_w = (int) (float(new_h) * ratio);
-    //     float conv_ratio_h = float(new_h)/float(h);
-    //     float conv_ratio_w = float(new_w)/float(w);
+        // float ratio = float(w) / float(h);
+        // int new_h = (int) sqrt(307200.f / ratio);
+        // int new_w = (int) (float(new_h) * ratio);
+        // float conv_ratio_h = float(new_h)/float(h);
+        // float conv_ratio_w = float(new_w)/float(w);
 
-    //     w = new_w;
-    //     h = new_h;
-    //     fx *= conv_ratio_w;
-    //     fy *= conv_ratio_h;
-    //     cx *= conv_ratio_w;
-    //     cy *= conv_ratio_h;
+        // w = new_w;     
+        // h = new_h;
+
+        // mK.at<float>(0,0) *= conv_ratio_w;
+        // mK.at<float>(1,1) *= conv_ratio_h;
+        // mK.at<float>(0,2) *= conv_ratio_w;
+        // mK.at<float>(1,2) *= conv_ratio_h;
     // }
 
     // Distortion coefficients
@@ -1534,20 +1378,13 @@ void Tracking::loadCameraParameters(const string &strCalibrationPath, const stri
 shared_ptr<FeatureExtractor> Tracking::getFeatureExtractor(const int& scaleNumFeaturesMonocular_,
                                                            const string &featureSettingsYamlFile,
                                                             const FeatureType& featureType){
-    //cv::FileStorage fSettings(featureSettingsYamlFile, cv::FileStorage::READ);
-    //cout << endl  << "Feature Extractor Parameters: " << endl;
+
     const KeypointType keypointType = GetKeypointType(featureType);
     const DescriptorType descriptorType = GetDescriptorType(featureType);
 
-    // Scale number of features with the resolution of the image
-    int numFeatures = ((2000.0 - 1000.0)/ (1241.0 * 376.0 - 640.0 * 480.0)) * (float(w * h) - 640.0 * 480.0) + numFeatures0;
-    if (numFeatures >  2000)
-        numFeatures = 2000;
-    else if (numFeatures < 1000)
-        numFeatures = 1000;
-    numFeatures *= scaleNumFeaturesMonocular_;
-
     shared_ptr<FeatureExtractorSettings> extractorSettings = make_shared<FeatureExtractorSettings>(keypointType, descriptorType, featureSettingsYamlFile);
+    extractorSettings->maxNumFeatures *= scaleNumFeaturesMonocular_;
+
     switch (keypointType) {
         case KEYP_ALIKED128:{
             return std::make_shared<FeatureExtractor_aliked128>(extractorSettings);

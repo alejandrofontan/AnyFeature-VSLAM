@@ -110,7 +110,7 @@ private:
     // Heuristics
 
     // Initialize
-    const float minRH{0.4};
+    const float minRH{0.5};
     const float minParallax{1.0f};
     const int minTriangulated{50};
 

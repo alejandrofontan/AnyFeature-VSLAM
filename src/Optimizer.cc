@@ -452,6 +452,7 @@ int Optimizer::PoseOptimization(Frame *pFrame)
 
 void Optimizer::LocalBundleAdjustment(Keyframe pKF, bool* pbStopFlag, shared_ptr<Map> pMap)
 {    
+
     // Local KeyFrames: First Breath Search from Current Keyframe
     list<Keyframe> lLocalKeyFrames;
 
@@ -486,7 +487,7 @@ void Optimizer::LocalBundleAdjustment(Keyframe pKF, bool* pbStopFlag, shared_ptr
             }
         }
     }
-    
+
     // Fixed Keyframes. Keyframes that see Local MapPoints but that are not Local Keyframes
     list<Keyframe> lFixedCameras;
     for(list<Pt>::iterator lit=llocalPts.begin(), lend=llocalPts.end(); lit!=lend; lit++)
@@ -512,8 +513,8 @@ void Optimizer::LocalBundleAdjustment(Keyframe pKF, bool* pbStopFlag, shared_ptr
     g2o::OptimizationAlgorithmLevenberg* solver = new g2o::OptimizationAlgorithmLevenberg(solver_ptr);
     optimizer.setAlgorithm(solver);
 
-    if(pbStopFlag)
-        optimizer.setForceStopFlag(pbStopFlag);
+    // if(pbStopFlag)
+    //     optimizer.setForceStopFlag(pbStopFlag);
 
     unsigned long maxKFid = 0;
 
@@ -649,18 +650,18 @@ void Optimizer::LocalBundleAdjustment(Keyframe pKF, bool* pbStopFlag, shared_ptr
         }
     }
 
-    if(pbStopFlag)
-        if(*pbStopFlag)
-            return;
+    // if(pbStopFlag)
+    //     if(*pbStopFlag)
+    //         return;
 
     optimizer.initializeOptimization();
     optimizer.optimize(5);
 
     bool bDoMore= true;
 
-    if(pbStopFlag)
-        if(*pbStopFlag)
-            bDoMore = false;
+    // if(pbStopFlag)
+    //     if(*pbStopFlag)
+    //         bDoMore = false;
 
     if(bDoMore)
     {
@@ -740,8 +741,8 @@ void Optimizer::LocalBundleAdjustment(Keyframe pKF, bool* pbStopFlag, shared_ptr
     }
 
     // Get Map Mutex
-    unique_lock<mutex> lock(pMap->mMutexMapUpdate);
 
+    unique_lock<mutex> lock(pMap->mMutexMapUpdate);
     if(!vToErase.empty())
     {
         for(size_t i=0;i<vToErase.size();i++)

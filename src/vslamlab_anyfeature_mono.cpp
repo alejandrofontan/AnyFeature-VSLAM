@@ -14,6 +14,71 @@ namespace ANYFEATURE_VSLAM{
     using Seconds = double;
 }
 
+#include <atomic>
+#include <thread>
+#include <termios.h>
+#include <unistd.h>
+#include <sys/select.h>
+#include <cstdio>
+
+// RAII: put terminal in raw-ish mode so we can read single key presses
+struct TerminalRawMode {
+    termios oldt{};
+    bool active{false};
+
+    TerminalRawMode() {
+        if (tcgetattr(STDIN_FILENO, &oldt) == 0) {
+            termios newt = oldt;
+            newt.c_lflag &= ~(ICANON | ECHO); // no line buffering, no echo
+            newt.c_cc[VMIN]  = 0;
+            newt.c_cc[VTIME] = 0;
+            if (tcsetattr(STDIN_FILENO, TCSANOW, &newt) == 0) {
+                active = true;
+            }
+        }
+    }
+
+    ~TerminalRawMode() {
+        if (active) tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
+    }
+};
+
+static bool stdin_has_data() {
+    fd_set set;
+    FD_ZERO(&set);
+    FD_SET(STDIN_FILENO, &set);
+    timeval tv{0, 0}; // no wait
+    int rv = select(STDIN_FILENO + 1, &set, nullptr, nullptr, &tv);
+    return (rv > 0) && FD_ISSET(STDIN_FILENO, &set);
+}
+
+// Starts a thread that increments `allowance` each time any key is pressed.
+// If 'q' is pressed, sets `quit=true`.
+inline std::thread startKeyAllowanceThread(std::atomic<int>& allowance,
+                                          std::atomic<bool>& quit)
+{
+    return std::thread([&]() {
+        TerminalRawMode raw; // applies to this process; RAII restores on exit
+        while (!quit.load(std::memory_order_relaxed)) {
+            if (stdin_has_data()) {
+                unsigned char c = 0;
+                ssize_t n = ::read(STDIN_FILENO, &c, 1);
+                if (n == 1) {
+                    if (c == 'q' || c == 'Q') {
+                        quit.store(true, std::memory_order_relaxed);
+                        break;
+                    }
+                    // Any other key press allows one image to pass
+                    allowance.fetch_add(1, std::memory_order_relaxed);
+                }
+            } else {
+                usleep(1000); // 1 ms, avoid busy spinning
+            }
+        }
+    });
+}
+
+
 
 void LoadImages(const string &pathToSequence, const string &rgb_csv,
                 vector<string> &imageFilenames, vector<ANYFEATURE_VSLAM::Seconds> &timestamps,
@@ -111,7 +176,9 @@ int main(int argc, char **argv)
     // AnyFeature-VSLAM inputs
     YAML::Node settings = YAML::LoadFile(settings_yaml);
     const vector<std::string> features = settings["features"].as<vector<std::string>>();
-
+    bool debug = (bool)settings["debug"].as<bool>();
+    std::cout << "[vslamlab_anyfeature_mono.cpp] Debug mode = " << debug << std::endl;
+  
     vector<FeatureType> featureTypes{};
     for(const auto& feat : features) {
         int feature_id = get_feature_id(feat);
@@ -155,8 +222,26 @@ int main(int argc, char **argv)
     cout << "Images in the sequence: " << nImages << endl << endl;
 
     // Main loop
-    for(size_t ni = 0; ni < nImages; ni++)
-    {
+    std::atomic<int> allowance{0};
+    std::atomic<bool> quit{false};
+    std::thread keyThread{};
+    if (debug){
+        keyThread = startKeyAllowanceThread(allowance, quit);
+    }
+
+    // for(size_t ni = 0; ni < nImages; ni++){
+    for (size_t ni = 0; ni < nImages; /* ni++ happens when a frame passes */) {
+        //std::cout << "Processing image " << ni << " / " << nImages << "\r";
+        //printf("frame %zu\n", ni); 
+        // Wait until we have at least 1 "allowed" frame, or quit
+        if (debug){
+            while (!quit.load(std::memory_order_relaxed) && allowance.load(std::memory_order_relaxed) == 0){
+                usleep(1000); // 1 ms
+            }
+            if (quit.load(std::memory_order_relaxed)) break;
+            //allowance.fetch_sub(1, std::memory_order_relaxed);
+            allowance.store(0, std::memory_order_relaxed);
+        }
 
         // Read image from file
         ANYFEATURE_VSLAM::Image im(imageFilenames[ni]);
@@ -181,6 +266,15 @@ int main(int argc, char **argv)
 
         if(ttrack < T)
             usleep((T-ttrack)  * 1e6);
+        //usleep((1.0 * 1e6));
+
+        // Advance to next image only after processing this one
+        ++ni;
+    }
+
+    if (debug){
+        quit.store(true, std::memory_order_relaxed);
+        if (keyThread.joinable()) keyThread.join();
     }
 
     // Stop all threads

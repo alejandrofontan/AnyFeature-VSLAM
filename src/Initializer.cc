@@ -108,6 +108,7 @@ bool Initializer::Initialize(const Frame &CurrentFrame, const vector<int> &match
     float RH = SH / (SH + SF);
 
     // Try to reconstruct from homography or fundamental depending on the ratio (0.40-0.45)
+    //std::cout << "Initializer: score H = " << SH << ", score F = " << SF << ", RH = " << RH << std::endl;
     if(RH > minRH)
         return ReconstructH(matchesInliersH,H,K,R21,t21,pts3D,isTriangulated,minParallax,minTriangulated);
 

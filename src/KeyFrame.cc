@@ -703,8 +703,8 @@ float KeyFrame::ComputeSceneMedianDepth(const int q)
     vector<float> vDepths;
     vec3f Rcw2 = Tcw_.block<1,3>(2,0).transpose();
     float zcw = Tcw_(2,3);
-    for(FeatureType ft : featureTypes){
-        for(int i=0; i<N.at(ft); i++)
+    for(auto& [ft, N_] : N){
+        for(int i = 0; i < N_; i++)
         {
             if(mvpMapPoints[ft][i])
             {

@@ -244,19 +244,14 @@ void Frame::AssignFeaturesToGrid(const FeatureType& featType)
 void Frame::ExtractFeatures(int flag, const Image & img)
 {
     if(flag==0){
-// #ifdef VANILLA_ORB_SLAM2
         Ntotal = 0;
         for(auto& [ft, extractor] : featureExtractorLeft){
-            //(*featureExtractorLeft[ft])(img, mvKeys[ft], mDescriptors[ft], keyPtsSigma2[ft], keyPtsInf[ft], keyPtsSize[ft], true);
-            (*extractor)(img,mvKeys[ft],mDescriptors[ft],keyPtsSigma2[ft],keyPtsInf[ft],keyPtsSize[ft]);
+            (*extractor)(img, mvKeys[ft], mDescriptors[ft], keyPtsSigma2[ft], keyPtsInf[ft], keyPtsSize[ft]);
             N[ft] = mvKeys[ft].size();
             Ntotal += N[ft];
-            
-            std::cout << "Extracted " << N[ft] << " keypoints of type " << ft << std::endl;
+        
+            //std::cout << "Extracted " << N[ft] << " keypoints of type " << ft << std::endl;
         }
-// #else
-//         (*featureExtractorLeft)(img,mvKeys,mDescriptors,keyPtsSigma2,keyPtsInf,keyPtsSize);
-// #endif
         maxKeyPtSize = featureExtractorLeft.begin()->second->GetMaxKeyPtSize();
         maxKeyPtSigma = featureExtractorLeft.begin()->second->GetMaxKeyPtSigma();
 
@@ -374,10 +369,10 @@ vector<size_t> Frame::GetFeaturesInArea(const float &x, const float  &y, const f
             {
                 const cv::KeyPoint &kpUn = mvKeysUn.at(featType)[vCell[j]];
 
-                if(keyPtsSize.at(featType)[vCell[j]] < minSize)
-                    continue;
-                if(keyPtsSize.at(featType)[vCell[j]] > maxSize)
-                    continue;
+                // if(keyPtsSize.at(featType)[vCell[j]] < minSize)
+                //     continue;
+                // if(keyPtsSize.at(featType)[vCell[j]] > maxSize)
+                //     continue;
 
                 const float distx = kpUn.pt.x - x;
                 const float disty = kpUn.pt.y - y;
