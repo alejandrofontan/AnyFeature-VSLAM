@@ -107,9 +107,9 @@ mat4f Tracking::GrabImageMonocular(Image &im, const double &timestamp)
     mImGray = im.grayImg;
 
     if(mState==NOT_INITIALIZED || mState==NO_IMAGES_YET)
-        currentFrame = Frame(im,timestamp,initFeatureExtractor,vocabulary,mK,mDistCoef,mbf,mThDepth, std::vector<FeatureType>{featureTypes[featureInitialization]});
+        currentFrame = Frame(im,timestamp,initFeatureExtractor,vocabulary,mK,mDistCoef,mbf,mThDepth);
     else
-        currentFrame = Frame(im,timestamp,featureExtractorLeft,vocabulary,mK,mDistCoef,mbf,mThDepth, featureTypes);
+        currentFrame = Frame(im,timestamp,featureExtractorLeft,vocabulary,mK,mDistCoef,mbf,mThDepth);
     
     Track();
     return currentFrame.Tcw;
@@ -558,20 +558,18 @@ bool Tracking::TrackReferenceKeyFrame(const bool& optimizePose)
 {   
     // We perform first an ORB matching with the reference keyframe
     // If enough matches are found we set up a PnP solver
-    vector<Pt> vpMapPointMatches;
+    std::map<FeatureType, std::vector<Pt>> vpMapPointMatches;
 
-    int nmatches{0};
+    std::map<FeatureType, int> nmatches_ft = matcher->SearchBruteForce(refKeyframe, currentFrame, vpMapPointMatches, refKeyframe->featureTypes);
+    int nmatches = 0;
     for (auto& [ft, N] : currentFrame.N) {
-        int nmatches_ft = matcher->SearchBruteForce(refKeyframe, currentFrame, vpMapPointMatches, ft);
-
-        if (nmatches_ft == 0)
+        if (nmatches_ft[ft] == 0)
             continue;
 
-        currentFrame.pts[ft] = vpMapPointMatches;   
-        currentFrame.N[ft] = static_cast<int>(vpMapPointMatches.size());
-        currentFrame.mvbOutlier[ft] = vector<bool>(vpMapPointMatches.size(), false);
-        nmatches += nmatches_ft;   
-        //std::cout << "TrackReferenceKeyFrame: feature type " << ft << ", nmatches " << nmatches_ft << ", opt_flow " << opt_flow << std::endl;
+        nmatches += nmatches_ft[ft];
+        currentFrame.pts[ft] = vpMapPointMatches[ft];   
+        currentFrame.N[ft] = static_cast<int>(vpMapPointMatches[ft].size());
+        currentFrame.mvbOutlier[ft] = vector<bool>(vpMapPointMatches[ft].size(), false);
     }
     
     if (!optimizePose)
@@ -615,9 +613,6 @@ void Tracking::UpdateLastFrame()
     mat4f Tlr = mlRelativeFramePoses.back();
 
     lastFrame.SetPose(Tlr * pRef->GetPose());
-
-    if(lastKeyFrameId==lastFrame.mnId || mSensor==System::MONOCULAR || !onlyTracking)
-        return;
 }
 
 bool Tracking::TrackWithMotionModel()
@@ -633,28 +628,8 @@ bool Tracking::TrackWithMotionModel()
         fill(currentFrame.pts.at(ft).begin(),currentFrame.pts.at(ft).end(),static_cast<Pt>(nullptr));
     }
 
-    // Project points seen in previous frame
-    float radiusTh;
-    if(mSensor!=System::STEREO)
-        radiusTh = radiusTh_high_trackMotModel;
-    else
-        radiusTh = radiusTh_low_trackMotModel;
+    int nmatches= matcher->SearchBruteForce(currentFrame, lastFrame, currentFrame.featureTypes);
     
-    int nmatches{0};
-    for (auto& [ft, N] : currentFrame.N) {
-        nmatches += matcher->SearchBruteForce(currentFrame,lastFrame, ft);
-    }
-
-    // If few matches, uses a wider window search
-    if(nmatches < minMatches_trackMotModel_high)
-    {   
-        nmatches = 0;
-        for (auto& [ft, N] : currentFrame.N) {
-            fill(currentFrame.pts.at(ft).begin(),currentFrame.pts.at(ft).end(),static_cast<Pt>(nullptr));
-            nmatches += matcher->SearchBruteForce(currentFrame,lastFrame, ft);
-        }
-    }
-
     if(nmatches < minMatches_trackMotModel_high)
         return false;
 
@@ -663,8 +638,8 @@ bool Tracking::TrackWithMotionModel()
 
     // Discard outliers
     int nmatchesMap = 0;
-    for (auto& [ft, N] : currentFrame.N) {
-        for(int i =0; i<currentFrame.N.at(ft); i++)
+    for (auto& [ft, N_] : currentFrame.N) {
+        for(int i{0}; i < N_; i++)
         {
             if(currentFrame.pts.at(ft)[i])
             {
@@ -672,8 +647,8 @@ bool Tracking::TrackWithMotionModel()
                 {
                     Pt pMP = currentFrame.pts.at(ft)[i];
 
-                    currentFrame.pts.at(ft)[i]=static_cast<Pt>(nullptr);
-                    currentFrame.mvbOutlier.at(ft)[i]=false;
+                    currentFrame.pts.at(ft)[i] = static_cast<Pt>(nullptr);
+                    currentFrame.mvbOutlier.at(ft)[i] = false;
                     pMP->mbTrackInView = false;
                     pMP->idLastFrameSeen = currentFrame.mnId;
                     nmatches--;
@@ -820,18 +795,7 @@ bool Tracking::TrackLocalMap()
             {   
                 if(mnMatchesInliers < nRefMatches * 0.5f)
                     emergencyKeyframe = true;
-                //localMapper->InterruptBA();
-                if(mSensor!=System::MONOCULAR)
-                {
-                    if(localMapper->KeyframesInQueue() < minKeyframesInQueue)
-                        return true;
-                    else
-                        return false;
-                }
-                else{
-                    return false;
-                }
-                    
+                return false;   
             }
         }
         else
@@ -1037,7 +1001,7 @@ bool Tracking::Relocalization(const FeatureType& featureType)
     vector<PnPsolver*> vpPnPsolvers;
     vpPnPsolvers.resize(nKFs);
 
-    vector<vector<Pt> > vvpMapPointMatches;
+    vector<std::map<FeatureType, vector<Pt>>> vvpMapPointMatches;
     vvpMapPointMatches.resize(nKFs);
 
     vector<bool> vbDiscarded;
@@ -1052,15 +1016,15 @@ bool Tracking::Relocalization(const FeatureType& featureType)
             vbDiscarded[i] = true;
         else
         {
-            int nmatches = matcher->SearchBruteForce(pKF, currentFrame, vvpMapPointMatches[i], featureType);
-            if(nmatches < minNmatches)
+            std::map<FeatureType, int> nmatches_ft = matcher->SearchBruteForce(pKF, currentFrame, vvpMapPointMatches[i], std::vector<FeatureType>{featureType});
+            if(nmatches_ft[featureType] < minNmatches)
             {
                 vbDiscarded[i] = true;
                 continue;
             }
             else
             {
-                PnPsolver* pSolver = new PnPsolver(currentFrame,vvpMapPointMatches[i], featureType);
+                PnPsolver* pSolver = new PnPsolver(currentFrame,vvpMapPointMatches[i][featureType], featureType);
                 pSolver->SetRansacParameters(ransac_probability,ransac_minInliers,ransac_maxIterations,ransac_minSet,ransac_epsilon,ransac_th2);
                 vpPnPsolvers[i] = pSolver;
                 nCandidates++;
@@ -1109,8 +1073,8 @@ bool Tracking::Relocalization(const FeatureType& featureType)
                 {
                     if(vbInliers[j])
                     {
-                        currentFrame.pts.at(featureType)[j]=vvpMapPointMatches[i][j];
-                        sFound.insert(vvpMapPointMatches[i][j]);
+                        currentFrame.pts.at(featureType)[j]=vvpMapPointMatches[i][featureType][j];
+                        sFound.insert(vvpMapPointMatches[i][featureType][j]);
                     }
                     else
                         currentFrame.pts.at(featureType)[j]=nullptr;

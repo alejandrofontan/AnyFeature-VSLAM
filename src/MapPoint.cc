@@ -302,7 +302,17 @@ Pt MapPoint::ComputeDistinctiveDescriptors()
             projIndexes.push_back(obs.second->projIndex);
             projKeyframes.push_back(projKeyframe);
         }
+    }
 
+    int latestIndex{0};
+    int index{int(projKeyframes[0]->mnFrameId)};
+    for (size_t i = 0; i < projKeyframes.size(); i++)
+    {
+        if(projKeyframes[i]->mnFrameId > index)
+        {
+            index = int(projKeyframes[i]->mnFrameId);
+            latestIndex = static_cast<int>(i);
+        }
     }
 
     if(descriptors.empty())
@@ -339,7 +349,9 @@ Pt MapPoint::ComputeDistinctiveDescriptors()
         }
     }
 
+    //BestIdx = latestIndex; // Prefer the latest one
     {
+        
         unique_lock<mutex> lock(mMutexFeatures);
         mDescriptor = descriptors[BestIdx].clone();
         refIndex = projIndexes[BestIdx];

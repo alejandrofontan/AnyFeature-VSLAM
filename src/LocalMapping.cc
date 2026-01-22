@@ -39,16 +39,6 @@ LocalMapping::LocalMapping(shared_ptr<Map> pMap, const float bMonocular, const v
     matcher = std::make_shared<FeatureMatcher>(imageWidth, imageHeight);
 }
 
-void LocalMapping::SetLoopCloser(std::shared_ptr<LoopClosing>  loopCloser_)
-{
-    loopCloser = loopCloser_;
-}
-
-void LocalMapping::SetTracker(std::shared_ptr<Tracking> tracker_)
-{
-    tracker = tracker_;
-}
-
 void LocalMapping::Run()
 {
 
@@ -175,24 +165,6 @@ void LocalMapping::ProcessNewKeyFrame()
     // Insert Keyframe in Map
     mpMap->AddKeyFrame(mpCurrentKeyFrame);
 
-    //
-    /*vec3f XYZRef =  mpCurrentKeyFrame->GetCameraCenter();
-#ifndef VANILLA_ORB_SLAM2
-    for(auto& position : trajectoryXYZ ){
-        vec3f XYZ =  position.second;
-        float distance3D = (XYZRef - XYZ).norm();
-        if(distance3D < minDistance){
-            if(keyframes_to_positions.find(position.first) != keyframes_to_positions.end()){
-                positions_to_keyframes[mpCurrentKeyFrame->keyId].insert(position.first);
-                keyframes_to_positions[mpCurrentKeyFrame->keyId].insert(position.first);
-            }
-            positions_to_keyframes[position.first].insert(mpCurrentKeyFrame->keyId);
-            keyframes_to_positions[position.first].insert(mpCurrentKeyFrame->keyId);
-        }
-    }
-
-#endif
-    trajectoryXYZ[mpCurrentKeyFrame->keyId] = XYZRef;*/
 }
 
 void LocalMapping::MapPointCulling()
@@ -200,13 +172,6 @@ void LocalMapping::MapPointCulling()
     // Check Recent Added MapPoints
     list<Pt>::iterator lit = mlpRecentAddedMapPoints.begin();
     const unsigned long int nCurrentKFid = mpCurrentKeyFrame->keyId;
-
-    int nThObs;
-    if(mbMonocular)
-        nThObs = 2;
-    else
-        nThObs = 3;
-    const int cnThObs = nThObs;
 
     while(lit!=mlpRecentAddedMapPoints.end())
     {
@@ -220,7 +185,7 @@ void LocalMapping::MapPointCulling()
             pMP->SetBadFlag();
             lit = mlpRecentAddedMapPoints.erase(lit);
         }
-        else if(((int)nCurrentKFid-(int)pMP->mnFirstKFid)>=2 && pMP->NumberOfObservations() <= cnThObs)
+        else if(((int)nCurrentKFid-(int)pMP->mnFirstKFid)>=2 && pMP->NumberOfObservations() <= MAP_POINT_CULLING_MIN_NUM_OBSERVATIONS)
         {
             pMP->SetBadFlag();
             lit = mlpRecentAddedMapPoints.erase(lit);
@@ -235,10 +200,7 @@ void LocalMapping::MapPointCulling()
 void LocalMapping::CreateNewMapPoints()
 {
     // Retrieve neighbor keyframes in covisibility graph
-    int nn{CREATE_NEW_MAP_POINTS_BEST_COVISIBILITY_KEYFRAMES};
-    if(mbMonocular)
-        nn = CREATE_NEW_MAP_POINTS_BEST_COVISIBILITY_KEYFRAMES_MONOCULAR;
-    const vector<Keyframe > vpNeighKFs = mpCurrentKeyFrame->GetBestCovisibilityKeyFrames(nn);
+    const vector<Keyframe > vpNeighKFs = mpCurrentKeyFrame->GetBestCovisibilityKeyFrames(CREATE_NEW_MAP_POINTS_BEST_COVISIBILITY_KEYFRAMES);
 
     // Init Current Keyframe
     mat4f Twc1, Tcw1;
@@ -273,18 +235,15 @@ void LocalMapping::CreateNewMapPoints()
         const float medianDepthKF2 = pKF2->ComputeSceneMedianDepth(2);
         const float ratioBaselineDepth = baseline/medianDepthKF2;
 
-        if(ratioBaselineDepth<0.01)
+        if(ratioBaselineDepth < CREATE_NEW_MAP_POINTS_RATIO_BASELINE_DEPTH)
             continue;
-
-        // Compute Fundamental Matrix
-        mat3f F12 = ComputeF12(mpCurrentKeyFrame, pKF2);
 
         // Search matches that fullfil epipolar constraint
         std::map<FeatureType, vector<pair<size_t,size_t>>> vMatchedIndices;
-        
-        for(auto& [featureType, N_]: pKF2->N){            
-            matcher->SearchForTriangulation(mpCurrentKeyFrame, pKF2, F12, vMatchedIndices[featureType], featureType);
-        
+
+        matcher->SearchForTriangulation(mpCurrentKeyFrame, pKF2, vMatchedIndices, mpCurrentKeyFrame->featureTypes);
+
+        for(auto& [featureType, N_]: pKF2->N){                    
             // Triangulate each match
             const int nmatches = vMatchedIndices.at(featureType).size();
             for(int ikp{0}; ikp < nmatches; ikp++)
@@ -307,10 +266,10 @@ void LocalMapping::CreateNewMapPoints()
                 float cosParallaxStereo = cosParallaxRays+1;
 
                 vec3f x3D;
-                const float sinThr = std::sqrt(1.0f - 0.9998f*0.9998f);
+                const float sinThr = std::sqrt(1.0f - CREATE_NEW_MAP_POINTS_MIN_COS * CREATE_NEW_MAP_POINTS_MIN_COS);
                 //if(true)
                 if(cosParallaxRays > 0 && (sinParallaxRays > sinThr))
-                //if(cosParallaxRays > 0 && (cosParallaxRays<0.9998))
+                //if(cosParallaxRays > 0 && (cosParallaxRays < CREATE_NEW_MAP_POINTS_MIN_COS))
                 {
                     Eigen::Matrix<float, 4, 4> A;
                         A.row(0) = xn1(0) * Tcw1.row(2) - Tcw1.row(0);
@@ -354,7 +313,7 @@ void LocalMapping::CreateNewMapPoints()
                 float v1 = fy1*y1*invz1+cy1;
                 float errX1 = u1 - kp1.pt.x;
                 float errY1 = v1 - kp1.pt.y;
-                if((errX1*errX1+errY1*errY1)>5.991*sigmaSquare1)
+                if((errX1*errX1+errY1*errY1) > CHI2_2DOF * sigmaSquare1)
                     continue;
                 
                 // Check reprojection error in second keyframe
@@ -367,7 +326,7 @@ void LocalMapping::CreateNewMapPoints()
                 float v2 = fy2*y2*invz2+cy2;
                 float errX2 = u2 - kp2.pt.x;
                 float errY2 = v2 - kp2.pt.y;
-                if((errX2*errX2+errY2*errY2)>5.991*sigmaSquare2)
+                if((errX2*errX2+errY2*errY2) > CHI2_2DOF * sigmaSquare2)
                     continue;
                 
                 // Check scale consistency
@@ -389,18 +348,12 @@ void LocalMapping::CreateNewMapPoints()
             }
         }
     }
-    // for (const auto& [featureType, count] : newMapPoints) {
-    //     std::cout << "Created " << count << " new map points for feature " << featureType << std::endl;
-    // }
 }
 
 void LocalMapping::SearchInNeighbors(const FeatureType& featureType)
 {
     // Retrieve neighbor keyframes
-    int nn = 10;
-    if(mbMonocular)
-        nn=20;
-    const vector<Keyframe > vpNeighKFs = mpCurrentKeyFrame->GetBestCovisibilityKeyFrames(nn);
+    const vector<Keyframe > vpNeighKFs = mpCurrentKeyFrame->GetBestCovisibilityKeyFrames(SEARCH_IN_NEIGHBORS_NUM_KEYFRAMES);
     vector<Keyframe > vpTargetKFs;
     for(vector<Keyframe >::const_iterator vit=vpNeighKFs.begin(), vend=vpNeighKFs.end(); vit!=vend; vit++)
     {
@@ -411,7 +364,7 @@ void LocalMapping::SearchInNeighbors(const FeatureType& featureType)
         pKFi->mnFuseTargetForKF = mpCurrentKeyFrame->keyId;
 
         // Extend to some second neighbors
-        const vector<Keyframe > vpSecondNeighKFs = pKFi->GetBestCovisibilityKeyFrames(5);
+        const vector<Keyframe > vpSecondNeighKFs = pKFi->GetBestCovisibilityKeyFrames(SEARCH_IN_NEIGHBORS_NUM_KEYFRAMES_SECOND);
         for(vector<Keyframe >::const_iterator vit2=vpSecondNeighKFs.begin(), vend2=vpSecondNeighKFs.end(); vit2!=vend2; vit2++)
         {
             Keyframe  pKFi2 = *vit2;
@@ -428,7 +381,7 @@ void LocalMapping::SearchInNeighbors(const FeatureType& featureType)
     {
         Keyframe  pKFi = *vit;
         if (featureType == FEAT_ORB)
-            matcher->Fuse(pKFi,vpMapPointMatches,3.0f, featureType);
+            matcher->Fuse(pKFi,vpMapPointMatches, SEARCH_IN_NEIGHBORS_RADIUS_TH, featureType);
     }
 
     // Search matches by projection from target KFs in current KF
@@ -454,7 +407,7 @@ void LocalMapping::SearchInNeighbors(const FeatureType& featureType)
     }
 
     if (featureType == FEAT_ORB)
-        matcher->Fuse(mpCurrentKeyFrame,vpFuseCandidates,3.0f, featureType);
+        matcher->Fuse(mpCurrentKeyFrame,vpFuseCandidates, SEARCH_IN_NEIGHBORS_RADIUS_TH, featureType);
 
     // Update points
     vpMapPointMatches = mpCurrentKeyFrame->GetMapPointMatches(featureType);
@@ -472,25 +425,6 @@ void LocalMapping::SearchInNeighbors(const FeatureType& featureType)
     }
     // Update connections in covisibility graph
     mpCurrentKeyFrame->UpdateConnections();
-}
-
-mat3f LocalMapping::ComputeF12(Keyframe &pKF1, Keyframe &pKF2)
-{
-    mat3f R1w = pKF1->GetRotation();
-    vec3f t1w = pKF1->GetTranslation();
-    mat3f R2w = pKF2->GetRotation();
-    vec3f t2w = pKF2->GetTranslation();
-
-    mat3f R12 = R1w * R2w.transpose();
-    vec3f t12 = -R1w * R2w.transpose() * t2w + t1w;
-
-    mat3f t12x = SkewSymmetricMatrix(t12);
-
-    const cv::Mat &K1 = pKF1->mK;
-    const cv::Mat &K2 = pKF2->mK;
-
-
-    return Converter::toMatrix3f(K1.t().inv()) * t12x * R12 * Converter::toMatrix3f(K2.inv());
 }
 
 void LocalMapping::RequestStop()
@@ -585,7 +519,7 @@ void LocalMapping::KeyFrameCulling()
                 continue;
             const vector<Pt> vpMapPoints = pKF->GetMapPointMatches(feat);
 
-            int nObs = minNumObservations;
+            int nObs = KEYFRAME_CULLING_MIN_NUM_OBSERVATIONS;
             const int thObs=nObs;
             int nRedundantObservations=0;
             int nMPs=0;
@@ -598,13 +532,6 @@ void LocalMapping::KeyFrameCulling()
                     if(!pMP->isBad())
                     {
                         FeatureType featType = pMP->featureType;
-
-                        if(!mbMonocular)
-                        {
-                            if(pKF->mvDepth.at(featType)[i]>pKF->mThDepth || pKF->mvDepth.at(featType)[i]<0)
-                                continue;
-                        }
-
                         nMPs++;
                         if(pMP->NumberOfObservations() > thObs)
                         {
@@ -637,25 +564,14 @@ void LocalMapping::KeyFrameCulling()
                     }
                 }
             }
-            if(nRedundantObservations > covisibilityThreshold * nMPs){  
+            if(nRedundantObservations > KEYFRAME_CULLING_COVISIBILITY_THRESHOLD * nMPs){  
                 if ((int(pKF->mnFrameId) % 10) != 0 && (int(pKF->keyId) % 5) != 0){
-                    //std::cout << "Local Mapping: Cull KeyFrame " << pKF->mnFrameId << std::endl;
                     pKF->SetBadFlag();
                     break;
                 }  
             }
     }
     }
-}
-
-mat3f LocalMapping::SkewSymmetricMatrix(const vec3f &v)
-{
-    mat3f M;
-    M <<     0.0f   , -v(2),  v(1),
-          v(2),    0.0f    , -v(0),
-         -v(1), v(0) ,     0.0f;
-
-    return M;
 }
 
 void LocalMapping::RequestReset()

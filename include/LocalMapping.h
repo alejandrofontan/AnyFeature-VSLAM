@@ -1,23 +1,3 @@
-/**
-* This file is part of ORB-SLAM2.
-*
-* Copyright (C) 2014-2016 Raúl Mur-Artal <raulmur at unizar dot es> (University of Zaragoza)
-* For more information see <https://github.com/raulmur/ORB_SLAM2>
-*
-* ORB-SLAM2 is free software: you can redistribute it and/or modify
-* it under the terms of the GNU General Public License as published by
-* the Free Software Foundation, either version 3 of the License, or
-* (at your option) any later version.
-*
-* ORB-SLAM2 is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-* GNU General Public License for more details.
-*
-* You should have received a copy of the GNU General Public License
-* along with ORB-SLAM2. If not, see <http://www.gnu.org/licenses/>.
-*/
-
 #ifndef LOCALMAPPING_H
 #define LOCALMAPPING_H
 
@@ -43,9 +23,8 @@ class LocalMapping
 public:
     LocalMapping(shared_ptr<Map> pMap, const float bMonocular, const vector<FeatureType>& featureTypes, const int& imageWidth, const int& imageHeight);
 
-    void SetLoopCloser(std::shared_ptr<LoopClosing>  loopCloser_);
-
-    void SetTracker(std::shared_ptr<Tracking> tracker_);
+    void SetLoopCloser(std::shared_ptr<LoopClosing>  loopCloser_){loopCloser = loopCloser_;};
+    void SetTracker(std::shared_ptr<Tracking> tracker_){tracker = tracker_;};
 
     // Main function
     void Run();
@@ -62,84 +41,76 @@ public:
     bool AcceptKeyFrames();
     void SetAcceptKeyFrames(bool flag);
     bool SetNotStop(bool flag);
-
     void InterruptBA();
-
     void RequestFinish();
     bool isFinished();
-
     int KeyframesInQueue(){
         unique_lock<std::mutex> lock(mMutexNewKFs);
         return mlNewKeyFrames.size();
     }
 
     vector<double> localMappingTime{};
-    vector<FeatureType> featureTypes{};
-    int featureProcessNewKeyframe{0};
-    int featureSearchInNeighbors{0};
+
 
 protected:
+
+    vector<FeatureType> featureTypes{};
+    int featureProcessNewKeyframe{0};
+
+    // Parameters for local mapping
+    const float CHI2_2DOF{5.991f};
+
+    // KeyFrameCulling()
+    const float KEYFRAME_CULLING_COVISIBILITY_THRESHOLD{0.9f};
+    const int KEYFRAME_CULLING_MIN_NUM_OBSERVATIONS{3};
+
+    // CreateNewMapPoints()
+    const int CREATE_NEW_MAP_POINTS_BEST_COVISIBILITY_KEYFRAMES{20};
+    const float CREATE_NEW_MAP_POINTS_RATIO_BASELINE_DEPTH{0.01f};
+    const float CREATE_NEW_MAP_POINTS_MIN_COS{0.9998f};
+
+    // MapPointCulling()
+    const int MAP_POINT_CULLING_MIN_NUM_OBSERVATIONS{2};
+
+    // SearchInNeighbors()
+    const int SEARCH_IN_NEIGHBORS_NUM_KEYFRAMES{20};
+    const int SEARCH_IN_NEIGHBORS_NUM_KEYFRAMES_SECOND{5};
+    const float SEARCH_IN_NEIGHBORS_RADIUS_TH{5.f};
 
     bool CheckNewKeyFrames();
     void ProcessNewKeyFrame();
     void CreateNewMapPoints();
-
     void MapPointCulling();
     void SearchInNeighbors(const FeatureType& featureType);
-
     void KeyFrameCulling();
-
-    mat3f ComputeF12(Keyframe &pKF1, Keyframe &pKF2);
-
-    mat3f SkewSymmetricMatrix(const vec3f &v);
-
-    bool mbMonocular;
-
     void ResetIfRequested();
-    bool mbResetRequested;
-    std::mutex mMutexReset;
-
     bool CheckFinish();
     void SetFinish();
-    bool mbFinishRequested;
-    bool mbFinished;
+
     std::mutex mMutexFinish;
+    std::mutex mMutexReset;
+    std::mutex mMutexNewKFs;
+    std::mutex mMutexStop;
+    std::mutex mMutexAccept;
 
-    shared_ptr<Map> mpMap;
-
+    std::shared_ptr<Map> mpMap;
     std::shared_ptr<LoopClosing> loopCloser;
     std::shared_ptr<Tracking> tracker;
-
-    std::list<Keyframe> mlNewKeyFrames;
-
-    Keyframe mpCurrentKeyFrame;
-
-    std::list<Pt> mlpRecentAddedMapPoints;
-
-    std::mutex mMutexNewKFs;
-
     std::shared_ptr<FeatureMatcher> matcher;
 
-    bool mbAbortBA;
+    std::list<Keyframe> mlNewKeyFrames;
+    Keyframe mpCurrentKeyFrame;
+    std::list<Pt> mlpRecentAddedMapPoints;
 
+    bool mbAbortBA;
     bool mbStopped;
     bool mbStopRequested;
     bool mbNotStop;
-    std::mutex mMutexStop;
-
     bool mbAcceptKeyFrames;
-    std::mutex mMutexAccept;
-
-    const float covisibilityThreshold{0.9f};
-    const int minNumObservations{3};
-    const float minDistance{0.05f};
-
-
-    const int CREATE_NEW_MAP_POINTS_BEST_COVISIBILITY_KEYFRAMES_MONOCULAR{20};
-    const int CREATE_NEW_MAP_POINTS_BEST_COVISIBILITY_KEYFRAMES{10};
-    const float CREATE_NEW_MAP_POINTS_DIST_RATIO{0.6f};
-    const float CREATE_NEW_MAP_POINTS_RATIO_FACTOR{1.5f};
-    const float CREATE_NEW_MAP_POINTS_RATIO_BASELINE_DEPTH{0.01f};
+    bool mbMonocular;
+    bool mbResetRequested;
+    bool mbFinishRequested;
+    bool mbFinished;
 
     const int imageWidth;
     const int imageHeight;

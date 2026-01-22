@@ -56,15 +56,19 @@ public:
     std::vector<cv::DMatch> robustFeatureMatching(std::vector<cv::DMatch>& matches, const std::vector<cv::KeyPoint>& kps1, const std::vector<cv::KeyPoint>& kps2, int outlierMehod = cv::FM_RANSAC);        
 
     // AllFeature-VSLAM SearchBruteForce         
-    int SearchBruteForce(const Keyframe& keyframe, const Frame &frame, vector<Pt>& mapPointMatches, const FeatureType& featType);
+
+    int SearchBruteForce(Frame &CurrentFrame, const Frame &LastFrame, 
+        const std::vector<FeatureType>& featureTypes);
     
+    std::map<FeatureType, int> SearchBruteForce(const Keyframe& keyframe, const Frame &frame, 
+        std::map<FeatureType, std::vector<Pt>>& mapPointMatches, 
+        const std::vector<FeatureType>& featureTypes);
+
+    void SearchForTriangulation(const Keyframe& keyframe1, const Keyframe& keyframe2,
+                                std::map<FeatureType, vector<pair<size_t,size_t>>>& matchedPairs,
+                                const std::vector<FeatureType>& featureTypes);
+
     int SearchForInitialization(const Frame &F1, const Frame &F2, std::vector<cv::Point2f> &pointsPrevMatched, std::vector<int> &matches12, const FeatureType& featureType);
-
-    int SearchForTriangulation(const Keyframe& keyframe1, const Keyframe& keyframe2, const mat3f& F12,
-                               std::vector<pair<size_t, size_t> > &matchedPairs, const FeatureType& featureType);
-
-    int SearchBruteForce(Frame &CurrentFrame, const Frame &LastFrame, const FeatureType& featureType);
-
 
     // Search matches between Frame keypoints and projected MapPoints. Returns number of matches
     // Used to track the local map (Tracking)
@@ -140,8 +144,11 @@ protected:
     // SearchBruteForce Keyframe-Frame
     // Tracking::TrackReferenceKeyframe & Tracking::Relocalization
     static const bool sBF_kf_lightglue = true;
-    static const bool sBF_kf_robustMatching = true;
-    static const int  sBF_kf_outlierMethod = cv::FM_LMEDS;
+    
+        
+    // SearchBruteForce Frame-Frame
+    // Tracking::TrackWithMotionModel
+    static const bool sBF_ff_lightglue = true;
 
     // SearchForInitialization Frame-Frame
     // Tracking::MonocularInitialization
@@ -154,12 +161,7 @@ protected:
     static const bool sFT_kk_lightglue = true;
     static const bool sFT_kk_robustMatching = true;
     static const int  sFT_kk_outlierMethod = cv::FM_LMEDS;   
-    
-    // SearchBruteForce Frame-Frame
-    // Tracking::TrackWithMotionModel
-    static const bool sBF_ff_lightglue = true;
-    static const bool sBF_ff_robustMatching = true;
-    static const int  sBF_ff_outlierMethod = cv::FM_LMEDS;       
+
 };
 
 }// namespace ORB_SLAM

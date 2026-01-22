@@ -173,11 +173,10 @@ Frame::Frame(const Frame &frame)
 
 Frame::Frame(const Image & img, const double &timeStamp,
              std::map<FeatureType, shared_ptr<FeatureExtractor>>& extractor,
-             shared_ptr<Vocabulary> vocabulary, cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth, std::vector<FeatureType> featureTypes)
+             shared_ptr<Vocabulary> vocabulary, cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth)
     :vocabulary(vocabulary),
     featureExtractorLeft(extractor), featureExtractorRight(),
-    mTimeStamp(timeStamp), mK(K.clone()),mDistCoef(distCoef.clone()), mbf(bf), mThDepth(thDepth),
-    featureTypes(featureTypes)
+    mTimeStamp(timeStamp), mK(K.clone()),mDistCoef(distCoef.clone()), mbf(bf), mThDepth(thDepth)
 {
     // Frame ID
     mnId = nNextId++;
@@ -243,18 +242,18 @@ void Frame::AssignFeaturesToGrid(const FeatureType& featType)
 
 void Frame::ExtractFeatures(int flag, const Image & img)
 {
+    featureTypes.clear();
     if(flag==0){
         Ntotal = 0;
         for(auto& [ft, extractor] : featureExtractorLeft){
             (*extractor)(img, mvKeys[ft], mDescriptors[ft], keyPtsSigma2[ft], keyPtsInf[ft], keyPtsSize[ft]);
             N[ft] = mvKeys[ft].size();
             Ntotal += N[ft];
-        
+            featureTypes.push_back(ft);
             //std::cout << "Extracted " << N[ft] << " keypoints of type " << ft << std::endl;
         }
         maxKeyPtSize = featureExtractorLeft.begin()->second->GetMaxKeyPtSize();
         maxKeyPtSigma = featureExtractorLeft.begin()->second->GetMaxKeyPtSigma();
-
     }
     else{
         std::cout << "This part of the code (Frame::ExtractORB) is not prepared to run with independent sigmas and sizes."<< std::endl;
@@ -335,8 +334,7 @@ bool Frame::isInFrustum(Pt pMP, float viewingCosLimit)
     return true;
 }
 
-vector<size_t> Frame::GetFeaturesInArea(const float &x, const float  &y, const float  &r,
-                                        const float& minSize, const float& maxSize, const FeatureType& featType) const
+vector<size_t> Frame::GetFeaturesInArea(const float &x, const float  &y, const float  &r, const FeatureType& featType) const
 {
     vector<size_t> vIndices;
     vIndices.reserve(N.at(featType));

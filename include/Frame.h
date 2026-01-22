@@ -67,7 +67,7 @@ public:
     // Constructor for mono cameras.
     Frame(const Image & img, const double &timeStamp,
           std::map<FeatureType, shared_ptr<FeatureExtractor>>& extractor,
-          shared_ptr<Vocabulary> vocabulary, cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth, std::vector<FeatureType> featureTypes);
+          shared_ptr<Vocabulary> vocabulary, cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth);
 
     // Extract ORB on the image. 0 for left image and 1 for right image.
     void ExtractFeatures(int flag, const Image & img);
@@ -98,7 +98,7 @@ public:
     // Compute the cell of a keypoint (return false if outside the grid)
     bool PosInGrid(const cv::KeyPoint &kp, int &posX, int &posY);
 
-    vector<size_t> GetFeaturesInArea(const float &x, const float  &y, const float  &r, const float& minSize, const float& maxSize, const FeatureType& featType) const;
+    vector<size_t> GetFeaturesInArea(const float &x, const float  &y, const float  &r,  const FeatureType& featType) const;
 
     // Search a match for each keypoint in the left image to a keypoint in the right image.
     // If there is a match, depth is computed and the right coordinate associated to the left keypoint is stored.

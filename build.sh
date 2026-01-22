@@ -62,15 +62,15 @@ done
 LIBRARY_PATH=$(realpath "$0")
 LIBRARY_DIR=$(dirname "LIBRARY_PATH")
 
-## Build DBoW2
-library_name="DBoW2"
-source_folder="${LIBRARY_DIR}/Thirdparty/${library_name}"
-build_library ${library_name} ${source_folder} ${verbose} ${force_build}
+# Build DBoW2
+# library_name="DBoW2"
+# source_folder="${LIBRARY_DIR}/Thirdparty/${library_name}"
+# build_library ${library_name} ${source_folder} ${verbose} ${force_build}
 
-## Build Light_Glue_CPP
-library_name="Light_Glue_CPP"
-source_folder="${LIBRARY_DIR}/Thirdparty/${library_name}"
-build_library ${library_name} ${source_folder} ${verbose} ${force_build}
+# # Build Light_Glue_CPP
+# library_name="Light_Glue_CPP"
+# source_folder="${LIBRARY_DIR}/Thirdparty/${library_name}"
+# build_library ${library_name} ${source_folder} ${verbose} ${force_build}
 
 ## Build AnyFeature-VSLAM
 library_name="AnyFeature-VSLAM"
