@@ -18,7 +18,7 @@
 
 **AnyFeature-VSLAM runs seamlessly as a baseline for experiments within the  [VSLAM-LAB](https://github.com/alejandrofontan/VSLAM-LAB) framework.** 
 
-**Note:** More updates from the publication [**RSS 2024 AnyFeature-VSLAM**](https://roboticsconference.org/program/papers/84/) will be available in the coming weeks. Extensions to **RGB-D** and **Stereo** cameras are coming soon, with future work planned for extensions to **Visual Inertial** systems.
+**Note:** More updates from the publication [**RSS 2024 AnyFeature-VSLAM**](https://www.roboticsproceedings.org/rss20/p084.pdf) will be available in the coming weeks. Extensions to **RGB-D** and **Stereo** cameras are coming soon, with future work planned for extensions to **Visual Inertial** systems.
 
 **Acknowledgments to:** [Raul Mur-Artal](http://webdiis.unizar.es/~raulmur/), [Juan D. Tardos](http://webdiis.unizar.es/~jdtardos/), [J. M. M. Montiel](http://webdiis.unizar.es/~josemari/) ([ORB-SLAM2](https://github.com/raulmur/ORB_SLAM2)), [Dorian Galvez-Lopez](http://doriangalvez.com/) ([DBoW2](https://github.com/dorian3d/DBoW2)), Carlos Campos, Richard Elvira and Juan J. Gómez Rodríguez ([ORB-SLAM3](https://github.com/UZ-SLAMLab/ORB_SLAM3)).
 
